@@ -14,6 +14,9 @@ import {
   runChecks,
   resolveConflict,
   rebaseOntoMain,
+  stashAndSync,
+  cherryPickCommit,
+  squashPRCommits,
   featureSteps,
   verifyBDD,
   requestChanges,
@@ -203,6 +206,37 @@ function renderConceptGraphic(type) {
         <circle cx="190" cy="43" r="14" fill="#14532d" stroke="#4ade80" stroke-width="2"/>
         <text x="190" y="47" text-anchor="middle" fill="#86efac" font-size="9" font-weight="700">OK</text>
       </svg>`;
+    case 'stash':
+      return `<svg class="concept-svg" viewBox="0 0 220 90" aria-hidden="true">
+        <rect x="20" y="26" width="52" height="36" rx="6" fill="#1e293b" stroke="#fbbf24" stroke-width="2"/>
+        <text x="46" y="48" text-anchor="middle" fill="#fde68a" font-size="8.5" font-family="monospace">STASH</text>
+        <path d="M78 44 H126" stroke="#38bdf8" stroke-width="2.5"/>
+        <text x="102" y="36" text-anchor="middle" fill="#7dd3fc" font-size="7.5" font-family="monospace">PULL</text>
+        <rect x="132" y="26" width="66" height="36" rx="6" fill="#14532d" stroke="#4ade80" stroke-width="2"/>
+        <text x="165" y="48" text-anchor="middle" fill="#86efac" font-size="8.5" font-family="monospace">STASH POP</text>
+      </svg>`;
+    case 'cherry-pick':
+      return `<svg class="concept-svg" viewBox="0 0 220 90" aria-hidden="true">
+        <path d="M20 26 H195" stroke="#c084fc" stroke-width="2.5" stroke-dasharray="4 3" fill="none"/>
+        <path d="M20 66 H195" stroke="#4ade80" stroke-width="3" fill="none"/>
+        <circle cx="65" cy="26" r="5" fill="#64748b"/>
+        <circle cx="115" cy="26" r="7" fill="#fbbf24"/>
+        <circle cx="165" cy="26" r="5" fill="#64748b"/>
+        <path d="M115 34 Q125 50, 142 60" stroke="#fbbf24" stroke-width="2.5" fill="none"/>
+        <circle cx="148" cy="66" r="7" fill="#4ade80" stroke="#fbbf24" stroke-width="2"/>
+        <text x="115" y="15" text-anchor="middle" fill="#fde68a" font-size="8" font-family="monospace">c0ffee7</text>
+      </svg>`;
+    case 'squash':
+      return `<svg class="concept-svg" viewBox="0 0 220 90" aria-hidden="true">
+        <circle cx="32" cy="45" r="5" fill="#c084fc"/>
+        <circle cx="52" cy="45" r="5" fill="#c084fc"/>
+        <circle cx="72" cy="45" r="5" fill="#c084fc"/>
+        <circle cx="92" cy="45" r="5" fill="#c084fc"/>
+        <path d="M106 45 H144" stroke="#fbbf24" stroke-width="2.5"/>
+        <circle cx="172" cy="45" r="13" fill="#14532d" stroke="#4ade80" stroke-width="2.5"/>
+        <text x="62" y="68" text-anchor="middle" fill="#d8b4fe" font-size="8" font-family="monospace">4 WIP COMMITS</text>
+        <text x="172" y="48" text-anchor="middle" fill="#86efac" font-size="9" font-weight="700">1</text>
+      </svg>`;
     default:
       return `<svg class="concept-svg" viewBox="0 0 220 90" aria-hidden="true">
         <path d="M18 45 H202" stroke="#38bdf8" stroke-width="3" fill="none"/>
@@ -218,7 +252,12 @@ function renderConceptGraphic(type) {
 }
 
 function renderThreeStations(run) {
-  const localActive = run.status === 'editing' || (run.conflict && !run.conflictResolved) || (run.needsRebase && !run.rebased);
+  const localActive =
+    run.status === 'editing' ||
+    (run.conflict && !run.conflictResolved) ||
+    (run.needsRebase && !run.rebased) ||
+    (run.needsStash && !run.stashedAndPopped) ||
+    (run.needsCherryPick && !run.cherryPicked);
   const codexActive = ['working', 'revising'].includes(run.status);
   const githubActive = run.status === 'review' && !localActive;
   return `<div class="stations-bar" aria-label="A to B to C Collaboration Flow">
@@ -230,7 +269,17 @@ function renderThreeStations(run) {
       </div>
     </div>
     <div class="station-arrow ${run.pushed ? 'active' : ''}">
-      <span>${run.conflict && !run.conflictResolved ? '⚡ git pull' : run.needsRebase && !run.rebased ? '🔀 git rebase' : 'git push ➔'}</span>
+      <span>${
+        run.conflict && !run.conflictResolved
+          ? '⚡ git pull'
+          : run.needsRebase && !run.rebased
+            ? '🔀 git rebase'
+            : run.needsStash && !run.stashedAndPopped
+              ? '📦 git stash pop'
+              : run.needsCherryPick && !run.cherryPicked
+                ? '🍒 cherry-pick'
+                : 'git push ➔'
+      }</span>
     </div>
     <div class="station-card ${githubActive || run.status === 'complete' ? 'station-active blue' : ''}">
       <span class="station-badge blue">B</span>
@@ -303,6 +352,9 @@ function renderLiveBranchGraph(run, level) {
           <span class="legend-chip user-chip"><i></i>🧑‍💻 feature/user-task ${run.branch === 'feature/user-task' ? '<b>(HEAD)</b>' : ''}</span>
           ${run.conflict && !run.conflictResolved ? '<span class="status-pill danger-pill">⚡ MERGE CONFLICT</span>' : ''}
           ${run.needsRebase && !run.rebased ? '<span class="status-pill warn-pill">⏳ 1 COMMIT BEHIND MAIN (NEEDS REBASE)</span>' : ''}
+          ${run.needsStash && !run.stashedAndPopped ? '<span class="status-pill warn-pill">📦 DIRTY TREE (NEEDS STASH &amp; POP)</span>' : ''}
+          ${run.needsCherryPick && !run.cherryPicked ? '<span class="status-pill warn-pill">🍒 NEEDS CHERRY-PICK (c0ffee7)</span>' : ''}
+          ${run.needsSquash && !run.squashed ? '<span class="status-pill warn-pill">🧹 4 WIP COMMITS (NEEDS SQUASH)</span>' : ''}
           ${run.status === 'complete' ? '<span class="status-pill ok-pill">✓ ALL BRANCHES MERGED</span>' : ''}
         </div>
       </div>
@@ -389,7 +441,12 @@ function render() {
   const focusSnapshot = keepFocus ? { id: previous.id, start: previous.selectionStart, end: previous.selectionEnd, top: previous.scrollTop, left: previous.scrollLeft, value: previous.value } : null;
   const steps = ['1. Edit Branch', '2. Commit & Push', '3. Codex Collaborates', '4. Review & Sync', '5. Merge to Main'];
 
-  const localActive = run.status === 'editing' || (run.conflict && !run.conflictResolved) || (run.needsRebase && !run.rebased);
+  const localActive =
+    run.status === 'editing' ||
+    (run.conflict && !run.conflictResolved) ||
+    (run.needsRebase && !run.rebased) ||
+    (run.needsStash && !run.stashedAndPopped) ||
+    (run.needsCherryPick && !run.cherryPicked);
   const remoteActive = !localActive && run.status !== 'complete';
 
   $('#app').innerHTML = `
@@ -398,7 +455,7 @@ function render() {
       <div class="rail-links">
         <button class="rail-button active" data-action="workspace" title="Workspace" aria-label="Workspace">${icon('code')}<span class="rail-tooltip">Workspace</span></button>
         <button class="rail-button" data-action="roadmap" title="Project &amp; Learning Roadmap" aria-label="View roadmap">${icon('branch')}<span class="rail-tooltip">Roadmap</span></button>
-        <button class="rail-button" data-action="curriculum" title="Curriculum" aria-label="View curriculum">${icon('book')}<span class="rail-tooltip">6 Missions</span></button>
+        <button class="rail-button" data-action="curriculum" title="Curriculum" aria-label="View curriculum">${icon('book')}<span class="rail-tooltip">9 Missions</span></button>
         <button class="rail-button" data-action="badges" title="Your achievements" aria-label="Your achievements">${icon('trophy')}${state.badges.length ? '<i class="notification-dot"></i>' : ''}<span class="rail-tooltip">Achievements</span></button>
       </div>
       <div class="rail-bottom"><button class="rail-button" data-action="help" title="Quick guide" aria-label="Quick guide">${icon('help')}</button><div class="avatar small">YOU</div></div>
@@ -428,7 +485,7 @@ function render() {
           <div>
             <div class="eyebrow"><span class="green-dot"></span> SOLO PRACTICE FOR 2-DEVELOPER GITHUB WORKFLOWS</div>
             <h1>No teammate? <span>Practice with Codex.</span></h1>
-            <p>Master branching, Pull Requests, code reviews, merge conflicts, <code>git rebase</code>, and <code>git revert</code> visually.</p>
+            <p>Master branching, Pull Requests, code reviews, merge conflicts, <code>git rebase</code>, <code>git revert</code>, <code>git stash</code>, <code>git cherry-pick</code>, and <code>Squash &amp; Merge</code> visually.</p>
           </div>
           <div class="progress-summary">
             <div class="progress-ring" style="--progress:${Math.round((state.completed.length / LEVELS.length) * 100)}%">
@@ -436,7 +493,7 @@ function render() {
             </div>
             <div>
               <strong>Your mission progress</strong>
-              <span>${state.completed.length === LEVELS.length ? 'All 6 collaboration missions mastered!' : `${state.completed.length} of ${LEVELS.length} missions completed`}</span>
+              <span>${state.completed.length === LEVELS.length ? 'All 9 collaboration missions mastered!' : `${state.completed.length} of ${LEVELS.length} missions completed`}</span>
             </div>
           </div>
         </div>
@@ -581,7 +638,7 @@ function render() {
         <section class="learning-path" aria-labelledby="learning-title">
           <div class="learning-header">
             <div>
-              <h2 id="learning-title">6 Interactive 2-Developer Missions</h2>
+              <h2 id="learning-title">9 Interactive 2-Developer Missions</h2>
               <p>Click any mission to practice a specific multi-person Git &amp; GitHub workflow with Codex.</p>
             </div>
             <button class="text-button" data-action="badges">${icon('trophy')}Your achievements<span class="count-pill">${state.badges.length}/${LEVELS.length}</span></button>
@@ -659,9 +716,15 @@ function terminalContent(run) {
       ? ['git pull origin main', 'git status', 'git add .']
       : run.needsRebase && !run.rebased
         ? ['git fetch', 'git rebase main', 'git log --oneline']
-        : state.currentLevel === 6 && run.status === 'editing'
-          ? ['git log --oneline', 'git revert HEAD', 'git status']
-          : ['git status', 'git add .', 'git commit -m "Complete task A"', 'git push origin feature/user-task', 'help'];
+        : run.needsStash && !run.stashedAndPopped
+          ? ['git stash', 'git pull origin main', 'git stash pop']
+          : run.needsCherryPick && !run.cherryPicked
+            ? ['git log --oneline', 'git cherry-pick c0ffee7', 'git status']
+            : run.needsSquash && !run.squashed
+              ? ['git log --oneline', 'git merge --squash feature/codex-task']
+              : state.currentLevel === 6 && run.status === 'editing'
+                ? ['git log --oneline', 'git revert HEAD', 'git status']
+                : ['git status', 'git add .', 'git commit -m "Complete task A"', 'git push origin feature/user-task', 'help'];
 
   return `<section class="terminal ${ui.terminalVisible ? '' : 'collapsed'}" aria-label="Practice terminal">
     <div class="terminal-header">
@@ -691,7 +754,8 @@ function isReadOnly(run) {
   return (
     run.activeFile === 'pom.xml' ||
     (run.status !== 'editing' && !(run.conflict && !run.conflictResolved && run.activeFile === 'UserProfile.java')) ||
-    (run.status === 'editing' && ['CartSteps.java', 'PaymentProcessorTest.java', 'SecurityConfig.java'].includes(run.activeFile))
+    (run.status === 'editing' &&
+      ['CartSteps.java', 'PaymentProcessorTest.java', 'SecurityConfig.java', 'AlertChannelConfig.java', 'HotfixHeaderFilter.java', 'AuditRetentionPolicy.java'].includes(run.activeFile))
   );
 }
 
@@ -713,6 +777,15 @@ function localActions(run) {
   }
   if (run.needsRebase && !run.rebased) {
     return `<button class="button primary" data-action="rebase">${icon('branch')}Rebase onto main (git rebase main)</button>`;
+  }
+  if (run.needsStash && !run.stashedAndPopped) {
+    return `<button class="button primary" data-action="stash-sync">${icon('save')}Stash, Pull Main &amp; Pop (git stash pop)</button>`;
+  }
+  if (run.needsCherryPick && !run.cherryPicked) {
+    return `<button class="button primary" data-action="cherry-pick">${icon('sparkle')}Cherry-Pick Commit c0ffee7</button>`;
+  }
+  if (run.needsSquash && !run.squashed) {
+    return `<button class="button primary" data-action="squash">${icon('merge')}Squash 4 WIP Commits → 1</button>`;
   }
   if (run.status === 'editing') {
     return `<button class="button primary push-button" data-action="push">${icon('rocket')}<span>Complete &amp; Push Task A</span>${icon('arrow')}</button><button class="button secondary check-code" data-action="check-code">${icon('circlecheck')}<span>Check code</span></button>`;
@@ -838,7 +911,15 @@ function githubContent() {
   const add = lines.filter(l => l.type === 'add').length;
   const remove = lines.filter(l => l.type === 'remove').length;
   const canReview = run.status === 'review' && pr.status !== 'merged';
-  const required = canReview && run.checks === 'passed' && (!run.conflict || run.conflictResolved) && (!run.needsRebase || run.rebased) && (level.id !== 3 || run.bddVerified);
+  const required =
+    canReview &&
+    run.checks === 'passed' &&
+    (!run.conflict || run.conflictResolved) &&
+    (!run.needsRebase || run.rebased) &&
+    (!run.needsStash || run.stashedAndPopped) &&
+    (!run.needsCherryPick || run.cherryPicked) &&
+    (!run.needsSquash || run.squashed) &&
+    (level.id !== 3 || run.bddVerified);
 
   return `<div class="hub-section-heading"><h3>Pull requests</h3><span>${run.prs.filter(p => p.status !== 'merged').length} open <i>·</i> ${run.prs.filter(p => p.status === 'merged').length} merged</span></div>
     <div class="pr-list">${run.prs
@@ -860,6 +941,21 @@ function githubContent() {
     ${
       run.needsRebase && !run.rebased && pr.id === 'user'
         ? `<div class="notice amber-notice">${icon('branch')}<div><strong>This branch is 1 commit behind main</strong><p>Codex merged <code>SecurityConfig.java</code> into main while you worked. Rebase your branch onto main for a clean linear history.</p><button class="text-button" data-action="rebase">Run git rebase main now ${icon('arrow')}</button></div></div>`
+        : ''
+    }
+    ${
+      run.needsStash && !run.stashedAndPopped && pr.id === 'user'
+        ? `<div class="notice amber-notice">${icon('save')}<div><strong>Local WIP edits block pulling main</strong><p>Codex merged <code>AlertChannelConfig.java</code> to main. Stash your work, pull main, and pop your stash!</p><button class="text-button" data-action="stash-sync">Stash, Pull Main &amp; Pop now ${icon('arrow')}</button></div></div>`
+        : ''
+    }
+    ${
+      run.needsCherryPick && !run.cherryPicked && pr.id === 'user'
+        ? `<div class="notice amber-notice">${icon('sparkle')}<div><strong>Need commit <code>c0ffee7</code> without Codex’s WIP commits</strong><p>Cherry-pick only commit <code>c0ffee7</code> from Codex’s branch onto your release branch.</p><button class="text-button" data-action="cherry-pick">Run git cherry-pick c0ffee7 now ${icon('arrow')}</button></div></div>`
+        : ''
+    }
+    ${
+      run.needsSquash && !run.squashed && pr.id === 'codex'
+        ? `<div class="notice amber-notice">${icon('merge')}<div><strong>PR #2 has 4 noisy WIP commits</strong><p>Squash Codex’s 4 commits (<code>wip</code>, <code>fix typo</code>, <code>oops</code>, <code>done</code>) into 1 clean atomic commit before approving.</p><button class="text-button" data-action="squash">Squash 4 WIP Commits → 1 now ${icon('arrow')}</button></div></div>`
         : ''
     }
     <div class="diff-viewer"><div class="diff-file-heading">${icon('file')}<span>${change.filename}</span><button class="icon-button" data-action="expand-diff" aria-label="${
@@ -1154,7 +1250,7 @@ function showRoadmap() {
       <div class="roadmap-bar-track"><div class="roadmap-bar-fill" style="width:${pct}%"></div></div>
     </div>
 
-    <h3 class="roadmap-section-title">1. Your 6-Mission Git Collaboration Path</h3>
+    <h3 class="roadmap-section-title">1. Your 9-Mission Git Collaboration Path</h3>
     <div class="curriculum-list roadmap-missions">
       ${LEVELS.map(l => {
         const done = state.completed.includes(l.id);
@@ -1184,9 +1280,9 @@ function showRoadmap() {
         <strong>✓ Pillar C · 2-Player Git Curriculum</strong>
         <p>All 6 multi-person workflows: Branch &amp; PR, Conflict Resolution, Spec Review, Failing CI Loop, Git Rebase, and Git Revert.</p>
       </div>
-      <div class="roadmap-pillar next">
-        <strong>⏳ Phase 5 · Next Up (Backlog)</strong>
-        <p>Mission 7 (<code>git stash</code>), Mission 8 (<code>git cherry-pick</code>), Mission 9 (Squash &amp; Merge), and multi-language repo templates.</p>
+      <div class="roadmap-pillar done">
+        <strong>✓ Phase 5 · Advanced Team Git (Missions 7–9)</strong>
+        <p>Completed! Mission 7 (<code>git stash pop</code>), Mission 8 (<code>git cherry-pick c0ffee7</code>), and Mission 9 (Squash &amp; Merge 4 WIP commits).</p>
       </div>
     </div>`,
     '<button class="button primary" data-action="close-modal">Back to workspace</button>'
@@ -1357,7 +1453,7 @@ document.addEventListener('click', async event => {
         break;
       case 'curriculum':
         showDialog(
-          'Six Missions. Complete 2-Developer Mastery.',
+          'Nine Missions. Complete 2-Developer Mastery.',
           `<div class="curriculum-list">${LEVELS.map(
             l =>
               `<button data-level="${l.id}"><span class="level-card-number">0${l.id}</span><span><strong>${l.title} · <em style="color:#78e5ab;font-style:normal">${l.topic}</em></strong><small>${l.description}</small></span>${icon(
@@ -1476,6 +1572,36 @@ document.addEventListener('click', async event => {
         ui.tab = 'github';
         render();
         toast('🔀 Branch rebased cleanly onto main (+60 XP)! Re-running CI checks…');
+        await runWorkflow();
+        break;
+      case 'stash-sync':
+        stashAndSync(state);
+        addTerminal('$ git stash && git pull origin main && git stash pop', 'command');
+        addTerminal('Synced AlertChannelConfig from main and popped stashed work!', 'success');
+        save(true);
+        ui.tab = 'github';
+        render();
+        toast('📦 Stashed, pulled main, and popped cleanly (+65 XP)! Re-running CI checks…');
+        await runWorkflow();
+        break;
+      case 'cherry-pick':
+        cherryPickCommit(state);
+        addTerminal('$ git cherry-pick c0ffee7', 'command');
+        addTerminal('Plucked commit c0ffee7 onto feature/user-task!', 'success');
+        save(true);
+        ui.tab = 'github';
+        render();
+        toast('🍒 Commit c0ffee7 cherry-picked cleanly (+70 XP)! Re-running CI checks…');
+        await runWorkflow();
+        break;
+      case 'squash':
+        squashPRCommits(state);
+        addTerminal('$ git merge --squash feature/codex-task', 'command');
+        addTerminal('Squashed 4 noisy WIP commits into 1 clean atomic commit!', 'success');
+        save(true);
+        ui.tab = 'github';
+        render();
+        toast('🧹 Squashed 4 WIP commits into 1 atomic commit (+75 XP)! Re-running CI checks…');
         await runWorkflow();
         break;
       case 'focus-conflict':

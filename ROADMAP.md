@@ -10,9 +10,9 @@ Track both the **Product Development Roadmap** (Pillar A → Pillar B → Pillar
 | :--- | :--- | :---: | :---: |
 | **Phase 1 (Pillar A)** | **Visual Git Architecture & Live Branch Graph** | ✅ Completed | `100%` |
 | **Phase 2 (Pillar B)** | **Beginner Spotlight Coach & Zero-Frustration UX** | ✅ Completed | `100%` |
-| **Phase 3 (Pillar C)** | **Complete 6-Mission 2-Player Git Curriculum** | ✅ Completed | `100%` |
+| **Phase 3 (Pillar C)** | **Core 6-Mission 2-Player Git Curriculum** | ✅ Completed | `100%` |
 | **Phase 4** | **Interactive In-App Roadmap & Mastery Tracker** | ✅ Completed | `100%` |
-| **Phase 5 (Next)** | **Advanced Team Scenarios (Cherry-Pick, Stash, Squash)** | ⏳ Planned | `0%` |
+| **Phase 5** | **Advanced Team Scenarios (Stash, Cherry-Pick, Squash)** | ✅ Completed | `100%` |
 
 ---
 
@@ -64,8 +64,7 @@ flowchart LR
 - [x] **6 Unlockable Achievement Badges** persisted in `localStorage`
 - [x] **In-App Interactive Roadmap & Skill Checklist Modal** (`🗺️ Roadmap` button in top bar & navigation rail)
 
-### ⏳ Phase 5 — Future Expansion Ideas (Backlog)
-- [ ] **Mission 7 (`git stash` & Context Switching):** Stash uncommitted work to review an urgent teammate PR
-- [ ] **Mission 8 (`git cherry-pick`):** Pull a specific hotfix commit from Codex's branch into a release branch
-- [ ] **Mission 9 (Squash & Merge vs. Merge Commit):** Practice cleaning up 4 messy WIP commits before merging a PR
-- [ ] **Language Switcher:** Let learners choose JavaScript/TypeScript, Python, or Java for the sample repository files
+### ✅ Phase 5 — Advanced Team Scenarios (Missions 7–9)
+- [x] **Mission 7 (`Pro` · +275 XP · `git stash` & Context Switching):** Stash uncommitted work, pull Codex's urgent `AlertChannelConfig` update from `main`, and `git stash pop`
+- [x] **Mission 8 (`Pro` · +300 XP · `git cherry-pick`):** Pluck only hotfix commit `c0ffee7` from Codex's experimental branch without pulling unstable WIP commits
+- [x] **Mission 9 (`Staff` · +350 XP · Squash & Merge):** Squash Codex's 4 noisy WIP commits (`wip`, `fix typo`, `oops`, `done`) into 1 clean atomic commit before merging

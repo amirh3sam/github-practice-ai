@@ -17,6 +17,9 @@ import {
   merge,
   resolveConflict,
   rebaseOntoMain,
+  stashAndSync,
+  cherryPickCommit,
+  squashPRCommits,
   requestChanges,
   verifyBDD,
   validateTask,
@@ -223,7 +226,56 @@ test('coachGuide provides actionable guidance at every stage', () => {
   assert.equal(coachGuide(state).ctaAction, 'next-level');
 });
 
-test('a learner completes all six levels in sequence with reloads and terminal commands', () => {
+test('level 7 requires git stash and pop to sync AlertChannelConfig from main', () => {
+  const state = ready(7);
+  const run = getRun(state);
+  assert.equal(run.needsStash, true);
+  assert.equal(run.stashedAndPopped, false);
+  assert.equal(runChecks(state), 'failed');
+  assert.throws(() => approve(state), /Stash/);
+  executeCommand(state, 'git stash');
+  executeCommand(state, 'git stash pop');
+  assert.equal(run.stashedAndPopped, true);
+  assert.equal(runChecks(state), 'passed');
+  approve(state);
+  merge(state);
+  assert.match(run.mainFiles['NotificationService.java'], /\[ALERT\]/);
+  assert.match(run.mainFiles['AlertChannelConfig.java'], /DEFAULT_CHANNEL/);
+});
+
+test('level 8 requires git cherry-pick c0ffee7 without pulling Codex WIP commits', () => {
+  const state = ready(8);
+  const run = getRun(state);
+  assert.equal(run.needsCherryPick, true);
+  assert.equal(run.cherryPicked, false);
+  assert.equal(runChecks(state), 'failed');
+  assert.throws(() => approve(state), /Cherry-pick/);
+  executeCommand(state, 'git cherry-pick c0ffee7');
+  assert.equal(run.cherryPicked, true);
+  assert.equal(runChecks(state), 'passed');
+  approve(state);
+  merge(state);
+  assert.match(run.mainFiles['RateLimiter.java'], /requestsPerMinute <= 60/);
+  assert.match(run.mainFiles['HotfixHeaderFilter.java'], /X-Forwarded-For/);
+});
+
+test('level 9 requires squashing 4 WIP commits into 1 atomic commit before merge', () => {
+  const state = ready(9);
+  const run = getRun(state);
+  assert.equal(run.needsSquash, true);
+  assert.equal(run.squashed, false);
+  assert.equal(runChecks(state), 'failed');
+  assert.throws(() => approve(state), /Squash/);
+  executeCommand(state, 'git merge --squash feature/codex-task');
+  assert.equal(run.squashed, true);
+  assert.equal(runChecks(state), 'passed');
+  approve(state);
+  merge(state);
+  assert.match(run.mainFiles['AuditLogger.java'], /actor \+ " -> " \+ action/);
+  assert.match(run.mainFiles['AuditRetentionPolicy.java'], /RETENTION_DAYS = 90/);
+});
+
+test('a learner completes all nine levels in sequence with reloads and terminal commands', () => {
   let state = createState();
   for (const level of LEVELS) {
     setLevel(state, level.id);
@@ -251,6 +303,18 @@ test('a learner completes all six levels in sequence with reloads and terminal c
       assert.equal(runChecks(state), 'failed');
       rebaseOntoMain(state);
     }
+    if (level.id === 7) {
+      assert.equal(runChecks(state), 'failed');
+      stashAndSync(state);
+    }
+    if (level.id === 8) {
+      assert.equal(runChecks(state), 'failed');
+      cherryPickCommit(state);
+    }
+    if (level.id === 9) {
+      assert.equal(runChecks(state), 'failed');
+      squashPRCommits(state);
+    }
     assert.equal(runChecks(state), 'passed');
     if (level.id === 3) verifyBDD(state);
     approve(state);
@@ -261,7 +325,7 @@ test('a learner completes all six levels in sequence with reloads and terminal c
     assert.equal(getRun(state).status, 'complete');
     assert.equal(getRun(state).prs.filter(pr => pr.status === 'merged').length, 2);
   }
-  assert.deepEqual(state.completed, [1, 2, 3, 4, 5, 6]);
+  assert.deepEqual(state.completed, [1, 2, 3, 4, 5, 6, 7, 8, 9]);
   assert.deepEqual(state.badges, LEVELS.map(level => level.badge));
-  assert.ok(state.xp > 500);
+  assert.ok(state.xp > 1200);
 });

@@ -26,7 +26,7 @@ export function newRun(id) {
     pushed: false,
     taskAFiles: null,
     prs: [],
-    selectedPR: id === 2 || id === 5 || id === 6 ? 'user' : 'codex',
+    selectedPR: [2, 5, 6, 7, 8].includes(id) ? 'user' : 'codex',
     aiLines: [],
     aiCode: '',
     revision: 0,
@@ -38,6 +38,12 @@ export function newRun(id) {
     needsRebase: false,
     rebased: false,
     reverted: false,
+    needsStash: false,
+    stashedAndPopped: false,
+    needsCherryPick: false,
+    cherryPicked: false,
+    needsSquash: false,
+    squashed: false,
     review: '',
     feedback: '',
     terminal: [],
@@ -252,6 +258,27 @@ export function validateTask(id, files) {
       check('PRODUCTION_READY restored to true', /PRODUCTION_READY\s*=\s*true\s*;/.test(code), 'Restore public static final boolean PRODUCTION_READY = true;'),
     ];
   }
+  if (id === 7) {
+    const body = methodBody(code, 'formatAlert');
+    results = [
+      check('Rejects null or blank message', /if\s*\(\s*message\s*==\s*null\s*\|\|\s*message\.isBlank\(\)\s*\)\s*\{?\s*throw new IllegalArgumentException\(/.test(body), 'Check if (message == null || message.isBlank()) and throw IllegalArgumentException.'),
+      check('Returns "[ALERT] " + message.trim()', /return\s+"\[ALERT\] "\s*\+\s*message\.trim\(\)\s*;/.test(body), 'Return "[ALERT] " + message.trim(); from formatAlert().'),
+    ];
+  }
+  if (id === 8) {
+    const body = methodBody(code, 'allowRequest');
+    results = [
+      check('Rejects negative requestsPerMinute', /if\s*\(\s*requestsPerMinute\s*<\s*0\s*\)\s*\{?\s*throw new IllegalArgumentException\(/.test(body), 'Check if (requestsPerMinute < 0) and throw IllegalArgumentException.'),
+      check('Allows up to 60 requests per minute', /return\s+requestsPerMinute\s*<=\s*60\s*;/.test(body), 'Return requestsPerMinute <= 60; from allowRequest().'),
+    ];
+  }
+  if (id === 9) {
+    const body = methodBody(code, 'formatEntry');
+    results = [
+      check('Rejects null or blank actor and action', /if\s*\(\s*actor\s*==\s*null\s*\|\|\s*action\s*==\s*null/.test(body), 'Reject null or blank actor and action with IllegalArgumentException.'),
+      check('Returns actor + " -> " + action', /return\s+actor\s*\+\s*" -> "\s*\+\s*action\s*;/.test(body), 'Return actor + " -> " + action; from formatEntry().'),
+    ];
+  }
   const noConflict = !/^(<<<<<<<|=======|>>>>>>>)/m.test(files[level.filename] || '');
   if (!noConflict) results.push(check('All conflict markers are removed', false, 'Remove <<<<<<<, =======, and >>>>>>> after combining the changes.'));
   return { pass: results.every(result => result.pass), results };
@@ -343,6 +370,32 @@ export function finishAI(state, id = state.currentLevel, revision = false) {
     } else if (id === 6) {
       run.prs.push({ id: 'codex', number: 2, title: level.aiTitle, author: 'Codex', branch: 'feature/codex-task', status: 'merged', approved: true });
       run.selectedPR = 'user';
+    } else if (id === 7) {
+      run.prs.push({ id: 'codex', number: 2, title: level.aiTitle, author: 'Codex', branch: 'feature/codex-task', status: 'merged', approved: true });
+      run.mainFiles[level.aiFile] = level.aiCode;
+      run.needsStash = true;
+      run.stashedAndPopped = false;
+      run.selectedPR = 'user';
+      recordCommit(run, 'Merge AlertChannelConfig into main', 'Codex', 'main');
+    } else if (id === 8) {
+      run.prs.push({ id: 'codex', number: 2, title: level.aiTitle, author: 'Codex', branch: 'feature/codex-task', status: 'open', approved: false });
+      run.history.push({ hash: 'c0ffee7', message: 'Sanitize X-Forwarded-For header', author: 'Codex', branch: 'feature/codex-task' });
+      run.branches['feature/codex-task'].push('c0ffee7');
+      run.needsCherryPick = true;
+      run.cherryPicked = false;
+      run.selectedPR = 'user';
+    } else if (id === 9) {
+      recordCommit(run, 'wip start retention', 'Codex', 'feature/codex-task');
+      recordCommit(run, 'oops forgot static', 'Codex', 'feature/codex-task');
+      recordCommit(run, 'fix typo in days', 'Codex', 'feature/codex-task');
+      run.prs.push({ id: 'codex', number: 2, title: level.aiTitle, author: 'Codex', branch: 'feature/codex-task', status: 'open', approved: false });
+      userPR.status = 'merged';
+      userPR.approved = true;
+      run.mainFiles = clone(run.committedFiles);
+      recordCommit(run, 'Merge task A after Codex review', 'Codex', 'main');
+      run.needsSquash = true;
+      run.squashed = false;
+      run.selectedPR = 'codex';
     } else {
       run.prs.push({ id: 'codex', number: 2, title: level.aiTitle, author: 'Codex', branch: 'feature/codex-task', status: 'open', approved: false });
       userPR.status = 'merged';
@@ -386,16 +439,68 @@ export function rebaseOntoMain(state) {
   recordCommit(run, 'Rebase feature/user-task onto main', 'You', 'feature/user-task');
 }
 
+export function stashAndSync(state) {
+  const run = getRun(state);
+  if (!run.needsStash || run.stashedAndPopped) throw new Error('No stash-and-sync operation is needed right now.');
+  const level = LEVELS[state.currentLevel - 1];
+  run.files[level.aiFile] = level.aiCode;
+  run.committedFiles[level.aiFile] = level.aiCode;
+  run.stashedAndPopped = true;
+  run.checks = 'idle';
+  state.xp = (state.xp || 0) + 65;
+  recordCommit(run, 'Sync main via git stash && git pull && git stash pop', 'You', 'feature/user-task');
+}
+
+export function cherryPickCommit(state) {
+  const run = getRun(state);
+  if (!run.needsCherryPick || run.cherryPicked) throw new Error('No commit needs cherry-picking right now.');
+  const level = LEVELS[state.currentLevel - 1];
+  run.files[level.aiFile] = level.aiCode;
+  run.committedFiles[level.aiFile] = level.aiCode;
+  run.cherryPicked = true;
+  run.checks = 'idle';
+  const codexPR = run.prs.find(p => p.id === 'codex');
+  if (codexPR) {
+    codexPR.status = 'merged';
+    codexPR.approved = true;
+  }
+  state.xp = (state.xp || 0) + 70;
+  recordCommit(run, 'Cherry-pick c0ffee7: sanitize X-Forwarded-For header', 'You', 'feature/user-task');
+}
+
+export function squashPRCommits(state) {
+  const run = getRun(state);
+  if (!run.needsSquash || run.squashed) throw new Error('This pull request does not have unsquashed WIP commits.');
+  run.squashed = true;
+  run.checks = 'idle';
+  run.history = run.history.filter(c => !['wip start retention', 'oops forgot static', 'fix typo in days'].includes(c.message));
+  const codexPR = run.prs.find(p => p.id === 'codex');
+  if (codexPR) codexPR.title = 'Add AuditRetentionPolicy (Squashed 4 → 1 commit)';
+  state.xp = (state.xp || 0) + 75;
+  recordCommit(run, 'Squash 4 WIP commits into atomic AuditRetentionPolicy commit', 'You', 'feature/codex-task');
+}
+
 export function runChecks(state) {
   const run = getRun(state);
   if (run.status !== 'review' && run.status !== 'complete') throw new Error('Push your code and wait for Codex before running the integration workflow.');
   const base = validateTask(state.currentLevel, run.committedFiles);
-  const branchClean = (!run.conflict || run.conflictResolved) && (!run.needsRebase || run.rebased);
+  const branchClean =
+    (!run.conflict || run.conflictResolved) &&
+    (!run.needsRebase || run.rebased) &&
+    (!run.needsStash || run.stashedAndPopped) &&
+    (!run.needsCherryPick || run.cherryPicked) &&
+    (!run.needsSquash || run.squashed);
   const branchDetail = run.conflict && !run.conflictResolved
     ? 'Resolve the conflict in UserProfile.java.'
     : run.needsRebase && !run.rebased
       ? 'Branch is behind main. Run "git rebase main" (or click Rebase onto Main) to replay your commit.'
-      : 'No unresolved merge conflicts and branch history is up to date.';
+      : run.needsStash && !run.stashedAndPopped
+        ? 'Main has new config. Run "git stash", "git pull origin main", and "git stash pop".'
+        : run.needsCherryPick && !run.cherryPicked
+          ? 'Missing hotfix commit c0ffee7. Run "git cherry-pick c0ffee7" to pluck Codex’s sanitizer commit.'
+          : run.needsSquash && !run.squashed
+            ? 'PR #2 has 4 noisy WIP commits. Run "git merge --squash" (or click Squash 4 WIP Commits) first.'
+            : 'No unresolved merge conflicts and branch history is up to date.';
   const checks = [
     { label: 'Build & source validation', pass: base.pass, detail: base.pass ? 'Task A meets the level contract.' : base.results.find(r => !r.pass).detail },
     { label: state.currentLevel === 3 ? 'Cucumber scenario checks' : 'Unit test checks', pass: true, detail: state.currentLevel === 3 ? 'Discount scenarios match the sample cart contract.' : 'All expected results match.' },
@@ -448,6 +553,9 @@ export function approve(state) {
   if (!pr || pr.status === 'merged') throw new Error('Select the open pull request to review.');
   if (run.conflict && !run.conflictResolved) throw new Error('Resolve the merge conflict first.');
   if (run.needsRebase && !run.rebased) throw new Error('Rebase your branch onto main first.');
+  if (run.needsStash && !run.stashedAndPopped) throw new Error('Stash, pull main, and pop your stash first.');
+  if (run.needsCherryPick && !run.cherryPicked) throw new Error('Cherry-pick commit c0ffee7 first.');
+  if (run.needsSquash && !run.squashed) throw new Error('Squash the 4 WIP commits first.');
   if (run.checks !== 'passed') throw new Error('All CI checks must pass before approval.');
   if (state.currentLevel === 3 && !run.bddVerified) throw new Error('Verify the Cucumber step mappings before approving.');
   if (state.currentLevel === 4 && run.revision === 0) throw new Error('Request changes so Codex fixes the EUR assertion.');
@@ -467,6 +575,9 @@ export function merge(state) {
     run.checks !== 'passed' ||
     (run.conflict && !run.conflictResolved) ||
     (run.needsRebase && !run.rebased) ||
+    (run.needsStash && !run.stashedAndPopped) ||
+    (run.needsCherryPick && !run.cherryPicked) ||
+    (run.needsSquash && !run.squashed) ||
     (state.currentLevel === 3 && !run.bddVerified)
   ) {
     throw new Error('Approve the open PR and pass all required checks before merging.');
@@ -475,7 +586,7 @@ export function merge(state) {
   pr.status = 'merged';
   run.mainFiles = clone(run.committedFiles);
   if (state.currentLevel === 1) run.mainFiles[level.filename] = integratedCalculator(run.committedFiles[level.filename]);
-  if (state.currentLevel === 3 || state.currentLevel === 4 || state.currentLevel === 5) run.mainFiles[level.aiFile] = run.aiCode;
+  if ([3, 4, 5, 7, 8, 9].includes(state.currentLevel)) run.mainFiles[level.aiFile] = run.aiCode;
   recordCommit(run, `Merge pull request #${pr.number}: ${pr.title}`, 'You', 'main');
   run.files = clone(run.mainFiles);
   run.committedFiles = clone(run.mainFiles);
@@ -554,6 +665,36 @@ export function coachGuide(state) {
         ctaLabel: '🔀 Rebase onto Main Now',
         ctaAction: 'rebase',
         cliCommand: 'git rebase main',
+      };
+    }
+    if (run.needsStash && !run.stashedAndPopped) {
+      return {
+        stepBadge: 'STEP 4 OF 5 · STASH, SYNC & POP',
+        title: 'Main has an urgent update! Stash, pull main, and pop your stash',
+        message: 'Codex pushed AlertChannelConfig to main. Run git stash → git pull origin main → git stash pop (or click the button) to sync cleanly!',
+        ctaLabel: '📦 Stash, Pull Main & Pop',
+        ctaAction: 'stash-sync',
+        cliCommand: 'git stash pop',
+      };
+    }
+    if (run.needsCherryPick && !run.cherryPicked) {
+      return {
+        stepBadge: 'STEP 4 OF 5 · CHERRY-PICK COMMIT c0ffee7',
+        title: 'Pluck ONLY commit c0ffee7 from Codex’s experimental branch!',
+        message: 'Codex’s branch has unfinished experiments, so don’t merge the whole branch—use git cherry-pick c0ffee7 to grab just the security fix!',
+        ctaLabel: '🍒 Cherry-Pick Commit c0ffee7',
+        ctaAction: 'cherry-pick',
+        cliCommand: 'git cherry-pick c0ffee7',
+      };
+    }
+    if (run.needsSquash && !run.squashed) {
+      return {
+        stepBadge: 'STEP 4 OF 5 · SQUASH 4 WIP COMMITS',
+        title: 'Codex opened PR #2 with 4 messy WIP commits! Squash them first',
+        message: 'Combine "wip", "oops", "fix typo", and "done" into a single clean atomic commit before merging to main.',
+        ctaLabel: '🧹 Squash 4 WIP Commits → 1',
+        ctaAction: 'squash',
+        cliCommand: 'git merge --squash feature/codex-task',
       };
     }
     if (state.currentLevel === 4 && run.revision === 0) {
@@ -658,6 +799,30 @@ export function executeCommand(state, command) {
       return reply(['First, rewinding head to replay your work on top of it...', 'Applying: Issue auth tokens', 'Successfully rebased and updated refs/heads/feature/user-task.']);
     }
     return reply('Current branch feature/user-task is already up to date with main.');
+  }
+  if (input === 'git stash' || input === 'git stash push') {
+    return reply(['Saved working directory and index state WIP on feature/user-task', 'Next: run "git pull origin main" and "git stash pop".']);
+  }
+  if (input === 'git stash pop' || input === 'git stash apply') {
+    if (run.needsStash && !run.stashedAndPopped) {
+      stashAndSync(state);
+      return reply(['Dropped refs/stash@{0} and synced AlertChannelConfig from main!', 'Run "mvn test" next to verify integration.']);
+    }
+    return reply('No stash entries found.');
+  }
+  if (/^git cherry-pick\b/.test(input)) {
+    if (run.needsCherryPick && !run.cherryPicked) {
+      cherryPickCommit(state);
+      return reply(['[feature/user-task] Cherry-picked commit c0ffee7 ("Sanitize X-Forwarded-For header")', '1 file changed: HotfixHeaderFilter.java added cleanly.']);
+    }
+    return reply('No commit needs cherry-picking on this branch.');
+  }
+  if (/^git merge --squash\b/.test(input) || input === 'git squash') {
+    if (run.needsSquash && !run.squashed) {
+      squashPRCommits(state);
+      return reply(['Squashed commit — combined 4 WIP commits into 1 clean atomic commit.', 'Ready to run checks and approve PR #2!']);
+    }
+    return reply('No WIP commits require squashing right now.');
   }
   if (/^git revert\b/.test(input)) {
     if (state.currentLevel === 6 && run.status === 'editing') {

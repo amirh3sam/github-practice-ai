@@ -14,6 +14,9 @@ Practicing `git init` and `git commit` alone is easy—but real-world Git requir
 | **4 · Fix the pipeline** | Failing GitHub Actions CI & `Request Changes` | Codex opens a PR that breaks unit tests. Inspect the red CI check, click **Request Changes**, watch Codex push a fix, and re-verify CI. |
 | **5 · Rebase onto main** | `git fetch` · `git rebase main` | Codex merges a security update into `main` while you are working on your branch. Rebase your commit cleanly onto the tip of `main`. |
 | **6 · Revert a bad merge** | `git log --oneline` · `git revert HEAD` | Codex accidentally merges a broken config to `main`. Safely roll it back using `git revert` and ship a hotfix PR! |
+| **7 · Stash & pop work** | `git stash` · `git pull` · `git stash pop` | Codex merges an urgent config to `main` while your working tree has uncommitted WIP edits. Stash, pull `main`, and pop your stash! |
+| **8 · Cherry-pick a commit** | `git log --oneline` · `git cherry-pick c0ffee7` | Codex has 3 WIP commits on an experimental branch, plus 1 critical security fix (`c0ffee7`). Pluck only `c0ffee7` onto your release branch! |
+| **9 · Squash & merge PR** | `git merge --squash` · `Squash & Merge PR` | Codex opens a PR with 4 noisy WIP commits (`wip`, `fix typo`, `oops`, `done`). Squash them into 1 clean atomic commit before merging to `main`! |
 
 ## Run Locally
 

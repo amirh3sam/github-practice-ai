@@ -238,6 +238,84 @@ public class ReleaseConfig {
     }
 }`;
 
+const notificationStarter = `package com.branchlab;
+
+public class NotificationService {
+    public String formatAlert(String message) {
+        // TODO: return "[ALERT] " + message.trim()
+        return "";
+    }
+}`;
+const notificationSolution = `package com.branchlab;
+
+public class NotificationService {
+    public String formatAlert(String message) {
+        if (message == null || message.isBlank()) {
+            throw new IllegalArgumentException("Alert message required");
+        }
+        return "[ALERT] " + message.trim();
+    }
+}`;
+const notificationAI = `package com.branchlab;
+
+public class AlertChannelConfig {
+    public static final String DEFAULT_CHANNEL = "#ops-alerts";
+    public static final boolean ENABLE_SLACK_WEBHOOK = true;
+}`;
+
+const rateLimiterStarter = `package com.branchlab;
+
+public class RateLimiter {
+    public boolean allowRequest(int requestsPerMinute) {
+        // TODO: reject negative values and allow up to 60 requests/min
+        return false;
+    }
+}`;
+const rateLimiterSolution = `package com.branchlab;
+
+public class RateLimiter {
+    public boolean allowRequest(int requestsPerMinute) {
+        if (requestsPerMinute < 0) {
+            throw new IllegalArgumentException("Requests cannot be negative");
+        }
+        return requestsPerMinute <= 60;
+    }
+}`;
+const cherryPickPatchAI = `package com.branchlab;
+
+public class HotfixHeaderFilter {
+    // Commit c0ffee7: sanitize X-Forwarded-For header without experimental rewrite
+    public static String sanitizeHeader(String header) {
+        return header == null ? "" : header.replaceAll("[^a-zA-Z0-9.:, -]", "");
+    }
+}`;
+
+const auditLogStarter = `package com.branchlab;
+
+public class AuditLogger {
+    public String formatEntry(String actor, String action) {
+        // TODO: return actor + " -> " + action
+        return "";
+    }
+}`;
+const auditLogSolution = `package com.branchlab;
+
+public class AuditLogger {
+    public String formatEntry(String actor, String action) {
+        if (actor == null || action == null || actor.isBlank() || action.isBlank()) {
+            throw new IllegalArgumentException("Actor and action are required");
+        }
+        return actor + " -> " + action;
+    }
+}`;
+const squashFeatureAI = `package com.branchlab;
+
+public class AuditRetentionPolicy {
+    // Created across 4 messy WIP commits on feature/codex-task; squash before merging!
+    public static final int RETENTION_DAYS = 90;
+    public static final boolean COMPRESS_ARCHIVES = true;
+}`;
+
 const pom = `<project>
   <modelVersion>4.0.0</modelVersion>
   <groupId>com.branchlab</groupId>
@@ -469,6 +547,109 @@ export const LEVELS = [
       'PRODUCTION_READY restored from false → true',
       'Running production smoke suite…',
       'Opening verification report on PR #1…',
+    ],
+  },
+  {
+    id: 7,
+    title: 'Pause & switch context',
+    short: 'Stash & pop work',
+    difficulty: 'Pro',
+    time: '8 min',
+    xp: 275,
+    topic: 'Git Stash & Sync',
+    gitSkill: 'git stash · git pull origin main · git stash pop',
+    filename: 'NotificationService.java',
+    path: 'src/main/java',
+    description: 'Codex lands an urgent config on main while you have uncommitted work! Stash your changes, sync with main, and pop your stash.',
+    conceptDiagram: 'stash',
+    whyTwoPeople: 'When a teammate pushes an urgent update to main while you are mid-edit, Git won’t let you pull or switch branches cleanly with dirty files. "git stash" shelves your edits safely so you can sync and "git stash pop" them right back!',
+    task: 'Format ops alerts',
+    taskDescription: 'Implement formatAlert(String message). After Codex updates main, run git stash → git pull origin main → git stash pop (or click Stash, Sync & Pop)!',
+    objectives: ['Reject null or blank message', 'Return "[ALERT] " + message.trim()'],
+    aiTask: 'Land AlertChannelConfig.java on main and require a clean stash-sync-pop cycle before merging.',
+    aiTitle: 'Add AlertChannelConfig defaults to main',
+    badge: 'Stash strategist',
+    badgeIcon: 'save',
+    files: { 'NotificationService.java': notificationStarter, 'AlertChannelConfig.java': '// Codex will push AlertChannelConfig to main.\n', 'pom.xml': pom },
+    solution: notificationSolution,
+    aiFile: 'AlertChannelConfig.java',
+    aiCode: notificationAI,
+    hint: 'Click "⚡ 1-Click Fill Code", push your branch, and then click "📦 Stash, Sync & Pop" (or run git stash && git pull origin main && git stash pop)!',
+    commands: [
+      'git checkout -b feature/codex-task',
+      'Adding AlertChannelConfig.java…',
+      'git push origin feature/codex-task',
+      'Merged AlertChannelConfig into main!',
+      'Hold on: local workspace needs a Stash → Pull → Pop cycle to integrate main.',
+    ],
+  },
+  {
+    id: 8,
+    title: 'Pick only the gem',
+    short: 'Cherry-pick a commit',
+    difficulty: 'Pro',
+    time: '8 min',
+    xp: 300,
+    topic: 'Git Cherry-Pick',
+    gitSkill: 'git log --oneline · git cherry-pick c0ffee7',
+    filename: 'RateLimiter.java',
+    path: 'src/main/java',
+    description: 'Codex has an experimental branch, but you need ONLY commit c0ffee7 (the security header sanitizer) on your branch right now!',
+    conceptDiagram: 'cherry-pick',
+    whyTwoPeople: 'Sometimes your teammate’s branch has unfinished experiments alongside one critical bugfix commit. "git cherry-pick <hash>" plucks just that single commit onto your branch without merging their whole branch!',
+    task: 'Enforce rate limits + cherry-pick',
+    taskDescription: 'Implement allowRequest(int requestsPerMinute) in RateLimiter.java, then cherry-pick Codex’s commit c0ffee7 onto your branch.',
+    objectives: ['Reject negative requestsPerMinute', 'Allow up to 60 requests per minute'],
+    aiTask: 'Push commit c0ffee7 (HotfixHeaderFilter.java) on feature/codex-task so you can cherry-pick it onto your branch.',
+    aiTitle: 'Commit c0ffee7: sanitize X-Forwarded-For header',
+    badge: 'Cherry-pick surgeon',
+    badgeIcon: 'sparkle',
+    files: { 'RateLimiter.java': rateLimiterStarter, 'HotfixHeaderFilter.java': '// Cherry-pick commit c0ffee7 from Codex to populate this file.\n', 'pom.xml': pom },
+    solution: rateLimiterSolution,
+    aiFile: 'HotfixHeaderFilter.java',
+    aiCode: cherryPickPatchAI,
+    hint: 'Click "⚡ 1-Click Fill Code", push your branch, and then click "🍒 Cherry-Pick Commit c0ffee7" (or run git cherry-pick c0ffee7 in the terminal)!',
+    commands: [
+      'git checkout -b feature/codex-task',
+      'Commit 111aaaa: experimental draft (do not merge)',
+      'Commit c0ffee7: sanitize X-Forwarded-For header (READY TO CHERRY-PICK)',
+      'Commit 222bbbb: unfinished benchmark',
+      'Use "git cherry-pick c0ffee7" to pluck only commit c0ffee7!',
+    ],
+  },
+  {
+    id: 9,
+    title: 'Four commits, one story',
+    short: 'Squash & merge PR',
+    difficulty: 'Master',
+    time: '8 min',
+    xp: 350,
+    topic: 'Squash & Merge',
+    gitSkill: 'git merge --squash · Clean Atomic History',
+    filename: 'AuditLogger.java',
+    path: 'src/main/java',
+    description: 'Codex pushed 4 noisy WIP commits ("wip", "oops", "fix typo", "done") in PR #2! Squash them into 1 clean commit before merging to main.',
+    conceptDiagram: 'squash',
+    whyTwoPeople: 'During feature development, teammates often make messy checkpoint commits. Using "Squash & Merge" combines all WIP commits from a PR into a single clean, readable commit on main!',
+    task: 'Build audit logger',
+    taskDescription: 'Implement formatEntry(String actor, String action) in AuditLogger.java, then Squash & Merge Codex’s 4 WIP commits into 1 clean commit.',
+    objectives: ['Reject null or blank actor/action', 'Return actor + " -> " + action'],
+    aiTask: 'Open PR #2 with 4 noisy WIP commits so you can practice squashing them into a single atomic commit.',
+    aiTitle: 'Add AuditRetentionPolicy (4 WIP commits)',
+    badge: 'History curator',
+    badgeIcon: 'trophy',
+    files: { 'AuditLogger.java': auditLogStarter, 'AuditRetentionPolicy.java': '// Codex will push 4 WIP commits for AuditRetentionPolicy.\n', 'pom.xml': pom },
+    solution: auditLogSolution,
+    aiFile: 'AuditRetentionPolicy.java',
+    aiCode: squashFeatureAI,
+    hint: 'Click "⚡ 1-Click Fill Code", push your branch, and then click "🧹 Squash 4 WIP Commits" before merging PR #2!',
+    commands: [
+      'git checkout -b feature/codex-task',
+      'git commit -m "wip start retention"',
+      'git commit -m "oops forgot static"',
+      'git commit -m "fix typo in days"',
+      'git commit -m "done for real"',
+      'Opened PR #2 with 4 noisy WIP commits. Squash them before merging!',
     ],
   },
 ];
