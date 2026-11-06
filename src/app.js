@@ -397,6 +397,7 @@ function render() {
       <a class="brand-symbol" href="#" aria-label="BranchLab home" data-action="home">${icon('branch')}</a>
       <div class="rail-links">
         <button class="rail-button active" data-action="workspace" title="Workspace" aria-label="Workspace">${icon('code')}<span class="rail-tooltip">Workspace</span></button>
+        <button class="rail-button" data-action="roadmap" title="Project &amp; Learning Roadmap" aria-label="View roadmap">${icon('branch')}<span class="rail-tooltip">Roadmap</span></button>
         <button class="rail-button" data-action="curriculum" title="Curriculum" aria-label="View curriculum">${icon('book')}<span class="rail-tooltip">6 Missions</span></button>
         <button class="rail-button" data-action="badges" title="Your achievements" aria-label="Your achievements">${icon('trophy')}${state.badges.length ? '<i class="notification-dot"></i>' : ''}<span class="rail-tooltip">Achievements</span></button>
       </div>
@@ -416,6 +417,7 @@ function render() {
             <span class="xp-counter">${state.xp || 0} XP</span>
           </div>
           <span class="save-indicator"><i></i><span data-save-status>${storageOK ? 'All changes saved' : 'Session only'}</span></span>
+          <button class="button subtle guide-button" data-action="roadmap">${icon('branch')}Roadmap</button>
           <button class="button subtle guide-button" data-action="help">${icon('book')}A → B → C Guide${icon('external')}</button>
           <span class="topbar-divider"></span>
           <div class="avatar">Y</div>
@@ -1132,6 +1134,65 @@ function showBadges() {
   );
 }
 
+function showRoadmap() {
+  const pct = Math.round((state.completed.length / LEVELS.length) * 100);
+  const rank = rankForXP(state.xp || 0);
+  showDialog(
+    'Project & Learning Roadmap (A → B → C)',
+    `<div class="roadmap-summary">
+      <div class="roadmap-summary-top">
+        <div>
+          <span class="modal-eyebrow">YOUR LIVE PROGRESS TRACKER</span>
+          <h3>${state.completed.length} of ${LEVELS.length} Missions Mastered (${pct}%)</h3>
+        </div>
+        <div class="rank-pill">
+          <span class="rank-dot" style="background:${rank.color}"></span>
+          <strong>${esc(rank.title)}</strong>
+          <span class="xp-counter">${state.xp || 0} XP</span>
+        </div>
+      </div>
+      <div class="roadmap-bar-track"><div class="roadmap-bar-fill" style="width:${pct}%"></div></div>
+    </div>
+
+    <h3 class="roadmap-section-title">1. Your 6-Mission Git Collaboration Path</h3>
+    <div class="curriculum-list roadmap-missions">
+      ${LEVELS.map(l => {
+        const done = state.completed.includes(l.id);
+        const current = state.currentLevel === l.id;
+        return `<button data-level="${l.id}" class="${done ? 'roadmap-done' : current ? 'roadmap-current' : ''}">
+          <span class="level-card-number">${done ? icon('check') : `0${l.id}`}</span>
+          <span>
+            <strong>Mission ${l.id}: ${esc(l.short)} · <em style="color:#78e5ab;font-style:normal">+${l.xp} XP</em></strong>
+            <small>${esc(l.gitSkill)}</small>
+          </span>
+          <span class="roadmap-status-tag ${done ? 'done' : current ? 'active' : ''}">${done ? '✓ Completed' : current ? '● Active' : 'Start →'}</span>
+        </button>`;
+      }).join('')}
+    </div>
+
+    <h3 class="roadmap-section-title">2. Product Engineering Roadmap (Pillar A → B → C)</h3>
+    <div class="roadmap-pillars">
+      <div class="roadmap-pillar done">
+        <strong>✓ Pillar A · Visual Git Engine</strong>
+        <p>Live 3-lane SVG branch graph, clickable commit node inspector, Station A → B → C flow bar, and concept illustrations.</p>
+      </div>
+      <div class="roadmap-pillar done">
+        <strong>✓ Pillar B · Guided Spotlight UX</strong>
+        <p>Top Spotlight Coach banner, active panel glow toggle, ⚡ 1-Click Fill Code, and Visual Merge Conflict Resolver bar.</p>
+      </div>
+      <div class="roadmap-pillar done">
+        <strong>✓ Pillar C · 2-Player Git Curriculum</strong>
+        <p>All 6 multi-person workflows: Branch &amp; PR, Conflict Resolution, Spec Review, Failing CI Loop, Git Rebase, and Git Revert.</p>
+      </div>
+      <div class="roadmap-pillar next">
+        <strong>⏳ Phase 5 · Next Up (Backlog)</strong>
+        <p>Mission 7 (<code>git stash</code>), Mission 8 (<code>git cherry-pick</code>), Mission 9 (Squash &amp; Merge), and multi-language repo templates.</p>
+      </div>
+    </div>`,
+    '<button class="button primary" data-action="close-modal">Back to workspace</button>'
+  );
+}
+
 function conflictHelp() {
   showDialog(
     'Keep the best of both branches',
@@ -1290,6 +1351,9 @@ document.addEventListener('click', async event => {
         break;
       case 'badges':
         showBadges();
+        break;
+      case 'roadmap':
+        showRoadmap();
         break;
       case 'curriculum':
         showDialog(
