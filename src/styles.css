@@ -423,6 +423,155 @@ main{max-width:1730px;margin:auto;padding:26px 34px 0}.page-heading{display:flex
   gap: 7px;
 }
 
+.stations-bar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed #243447;
+}
+.station-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 11px;
+  border-radius: 8px;
+  background: #0d141d;
+  border: 1px solid #223042;
+  min-width: 0;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.station-card > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.station-card strong {
+  font-size: 11px;
+  color: #e2e8f0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.station-card small {
+  font-size: 9.5px;
+  color: #8496ab;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.station-badge {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  background: #1a3829;
+  border: 1px solid #4ade80;
+  color: #86efac;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 700;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+.station-badge.blue {
+  background: #172b3d;
+  border-color: #38bdf8;
+  color: #7dd3fc;
+}
+.station-badge.purple {
+  background: #2b1f42;
+  border-color: #c084fc;
+  color: #d8b4fe;
+}
+.station-card.station-active.green {
+  border-color: #4ade80;
+  background: #12261d;
+  box-shadow: 0 0 0 2px #4ade8022;
+}
+.station-card.station-active.blue {
+  border-color: #38bdf8;
+  background: #122230;
+  box-shadow: 0 0 0 2px #38bdf822;
+}
+.station-card.station-active.purple {
+  border-color: #c084fc;
+  background: #211833;
+  box-shadow: 0 0 0 2px #c084fc22;
+}
+.station-arrow {
+  font-family: var(--mono);
+  font-size: 9.5px;
+  color: #55697e;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: #111923;
+  border: 1px solid #1f2d3d;
+  white-space: nowrap;
+}
+.station-arrow.active {
+  color: #86efac;
+  border-color: #34694d;
+  background: #142b20;
+}
+.station-arrow.active.purple {
+  color: #d8b4fe;
+  border-color: #5b3e85;
+  background: #241936;
+}
+
+.spotlight-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  border: 1px solid #2e4358;
+  background: #141e29;
+  color: #94a3b8;
+}
+.spotlight-toggle .icon {
+  width: 13px;
+  height: 13px;
+}
+.spotlight-toggle.active {
+  border-color: #458261;
+  background: #173024;
+  color: #9ef0c0;
+}
+.active-turn-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: #22c55e;
+  color: #071910;
+  font-size: 8.5px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  margin-left: 6px;
+}
+.panel-spotlight-active {
+  border-color: #4ade80 !important;
+  box-shadow: 0 0 0 2px #4ade8028, 0 12px 32px #0006 !important;
+}
+.panel-spotlight-dim {
+  opacity: 0.86;
+}
+@media (max-width: 900px) {
+  .stations-bar {
+    grid-template-columns: 1fr;
+  }
+  .station-arrow {
+    display: none;
+  }
+}
+
 @media(min-width:1650px){body{font-size:14px}main{padding:36px 42px 0}.topbar{padding:0 42px}.workspace-grid{gap:26px}.hub-content{padding:25px}.editor-layout{grid-template-columns:169px minmax(0,1fr);height:409px}.line-numbers{font-size:11px;line-height:22px}.file-item{font-size:9px}.objective-card p{font-size:11px}.objective-checklist>span{font-size:10px}.teammate-task p{font-size:12px}.workflow li{font-size:12px}.hub-tab{font-size:11px}.level-card-content strong{font-size:12px}.level-card-topic{font-size:8px}.level-card{padding:19px 17px}}
 @media(max-width:1250px){.topbar{padding:0 25px;gap:17px}main{padding:26px 25px 0}h1{font-size:25px}.progress-summary strong{font-size:10px}.progress-summary>div>span{font-size:9px}.workflow{padding:17px 18px;gap:23px}.workflow-label{font-size:8px;max-width:124px}.workflow-label>span{font-size:9px}.workflow li{font-size:9px;gap:7px}.step-number{width:24px;height:24px;font-size:10px}.step-line{margin:0 9px 0 1px;min-width:8px}.workspace-grid{gap:16px;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr)}.panel-heading{padding:0 14px}.panel-label{gap:6px}.panel-label h2{font-size:11px}.local-tag{display:none}.branch-button{font-size:9px}.level-header{padding:17px 15px 14px}.level-header h3{font-size:15px}.level-select-wrap{max-width:120px}.level-select-wrap select{font-size:9px}.objective-card{margin:0 13px 15px;padding:12px 10px;gap:8px}.objective-card p{font-size:9px}.objective-title .text-button{font-size:8px;gap:3px}.objective-checklist>span{font-size:8px}.objective-title strong{font-size:10px}.editor-layout{grid-template-columns:116px minmax(0,1fr);height:360px}.file-item{padding-left:11px;font-size:7px;gap:4px}.project-folder{font-size:8px}.folder-item{font-size:8px}.explorer-bottom{font-size:7px}.editor-breadcrumb{gap:3px;font-size:7px}.editor-tab{font-size:8px}.line-numbers{font-size:9px;line-height:20px;width:32px}.editor-status{gap:7px;font-size:7px}.hub-content{padding:18px}.hub-tabs{padding:0 7px;gap:3px}.hub-tab{font-size:9px;gap:5px}.hub-tab>.icon{width:13px;height:13px}.codex-identity h3{font-size:13px}.codex-identity{gap:9px}.ai-label{font-size:6px}.teammate-task{padding:12px 10px;gap:9px}.teammate-task p{font-size:10px}.mini-label{font-size:7px}.teammate-footer{padding:0 13px}.teammate-footer>span{font-size:7px}.teammate-footer>.text-button{font-size:7px}.level-card{padding:16px 11px;gap:9px}.level-card-topic{font-size:6px}.level-card-content strong{font-size:10px}.level-card-number{width:29px;height:31px;font-size:11px}.level-card-arrow{width:11px;height:11px}.level-card.active:after{font-size:5px}.review-actions{gap:3px}.review-actions .button{font-size:8px;padding:7px}.review-actions .icon{width:11px}.pr-heading{gap:6px}.pr-heading>span:nth-child(2){font-size:7px}.diff-count{font-size:8px}.pr-list-item strong{font-size:9px}.branch-visualizer{grid-template-columns:1fr}}
 @media(max-width:1050px){.progress-summary{display:none}.product-name{font-size:10px}.topbar-right{gap:14px}.topbar{gap:16px}.workflow-label{display:none}.workflow{padding:20px}.workflow li{font-size:10px}.workspace-grid{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.file-explorer{display:none}.editor-layout{grid-template-columns:1fr}.hub-content{padding:16px}.level-select-wrap{max-width:110px}.level-header h3{font-size:14px}.objective-title .text-button{font-size:0;gap:0}.objective-title .text-button .icon{width:14px;height:14px}.workspace-actions{padding:14px 13px 12px;gap:4px}.workspace-actions .button{font-size:10px;padding:8px 10px}.push-button{max-width:255px}.teammate-footer>span{font-size:6px}.level-cards{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.level-card-topic{white-space:normal;line-height:1.5;font-size:7px}.level-card-arrow{display:none}.page-footer{font-size:7px}.codex-idle>h3{font-size:17px}.codex-idle>p{font-size:10px}.online-pill{padding:3px 5px;font-size:7px}.codex-identity h3{gap:7px}.codex-avatar{width:34px;height:34px;border-radius:8px}.codex-avatar>.icon{width:21px;height:21px}.coach-banner{grid-template-columns:1fr;gap:12px}}

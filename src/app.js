@@ -80,6 +80,7 @@ const ui = {
   diffExpanded: false,
   levelMenuOpen: false,
   selectedCommitHash: null,
+  spotlightMode: true,
 };
 
 let saveTimer;
@@ -216,6 +217,41 @@ function renderConceptGraphic(type) {
   }
 }
 
+function renderThreeStations(run) {
+  const localActive = run.status === 'editing' || (run.conflict && !run.conflictResolved) || (run.needsRebase && !run.rebased);
+  const codexActive = ['working', 'revising'].includes(run.status);
+  const githubActive = run.status === 'review' && !localActive;
+  return `<div class="stations-bar" aria-label="A to B to C Collaboration Flow">
+    <div class="station-card ${localActive ? 'station-active green' : ''}">
+      <span class="station-badge">A</span>
+      <div>
+        <strong>Your Local Machine</strong>
+        <small>Branch: <code>${esc(run.branch)}</code> · ${localActive ? '⚡ Your Turn Here' : 'Synced'}</small>
+      </div>
+    </div>
+    <div class="station-arrow ${run.pushed ? 'active' : ''}">
+      <span>${run.conflict && !run.conflictResolved ? '⚡ git pull' : run.needsRebase && !run.rebased ? '🔀 git rebase' : 'git push ➔'}</span>
+    </div>
+    <div class="station-card ${githubActive || run.status === 'complete' ? 'station-active blue' : ''}">
+      <span class="station-badge blue">B</span>
+      <div>
+        <strong>GitHub Remote (origin)</strong>
+        <small>${run.status === 'complete' ? '✓ Merged to main' : `${run.prs.filter(p => p.status !== 'merged').length} Open PR · CI: ${run.checks}`}</small>
+      </div>
+    </div>
+    <div class="station-arrow ${codexActive || run.prs.length > 1 ? 'active purple' : ''}">
+      <span>${codexActive ? '⬅ Codex pushing…' : '⬅ PR #2'}</span>
+    </div>
+    <div class="station-card ${codexActive ? 'station-active purple' : ''}">
+      <span class="station-badge purple">C</span>
+      <div>
+        <strong>Codex AI Teammate</strong>
+        <small>Branch: <code>feature/codex-task</code> · ${codexActive ? '🤖 Writing code…' : run.prs.length > 1 ? 'PR submitted' : 'Waiting for you'}</small>
+      </div>
+    </div>
+  </div>`;
+}
+
 function renderLiveBranchGraph(run, level) {
   const commits = run.history;
   const width = Math.max(660, 150 + commits.length * 105);
@@ -298,6 +334,7 @@ function renderLiveBranchGraph(run, level) {
         <span class="commit-meta-tag">by <b>${esc(selected.author)}</b> on <code>${esc(selected.branch)}</code></span>
         <button class="text-button" data-action="branches">${icon('branch')}Full history (${commits.length})</button>
       </div>
+      ${renderThreeStations(run)}
     </div>
     <aside class="concept-card" aria-label="Why two developers need this skill">
       <div class="concept-card-top">
@@ -352,6 +389,9 @@ function render() {
   const focusSnapshot = keepFocus ? { id: previous.id, start: previous.selectionStart, end: previous.selectionEnd, top: previous.scrollTop, left: previous.scrollLeft, value: previous.value } : null;
   const steps = ['1. Edit Branch', '2. Commit & Push', '3. Codex Collaborates', '4. Review & Sync', '5. Merge to Main'];
 
+  const localActive = run.status === 'editing' || (run.conflict && !run.conflictResolved) || (run.needsRebase && !run.rebased);
+  const remoteActive = !localActive && run.status !== 'complete';
+
   $('#app').innerHTML = `
     <aside class="rail" aria-label="Workspace navigation">
       <a class="brand-symbol" href="#" aria-label="BranchLab home" data-action="home">${icon('branch')}</a>
@@ -367,13 +407,16 @@ function render() {
         <a class="wordmark" href="#" data-action="home">Branch<span>Lab</span><span class="beta">2.0 VISUAL</span></a>
         <span class="topbar-divider"></span><span class="product-name">2-Player GitHub Collaboration Simulator (You + Codex AI)</span>
         <div class="topbar-right">
+          <button class="spotlight-toggle ${ui.spotlightMode ? 'active' : ''}" type="button" data-action="toggle-spotlight" aria-pressed="${ui.spotlightMode}" title="Toggle Guided Spotlight ring on the active panel">
+            ${icon('sparkle')}<span>Guided Spotlight: ${ui.spotlightMode ? 'ON' : 'OFF'}</span>
+          </button>
           <div class="rank-pill" title="Your Git Collaboration XP &amp; Rank">
             <span class="rank-dot" style="background:${rank.color}"></span>
             <strong>${esc(rank.title)}</strong>
             <span class="xp-counter">${state.xp || 0} XP</span>
           </div>
           <span class="save-indicator"><i></i><span data-save-status>${storageOK ? 'All changes saved' : 'Session only'}</span></span>
-          <button class="button subtle guide-button" data-action="help">${icon('book')}How 2-Person Git Works${icon('external')}</button>
+          <button class="button subtle guide-button" data-action="help">${icon('book')}A → B → C Guide${icon('external')}</button>
           <span class="topbar-divider"></span>
           <div class="avatar">Y</div>
         </div>
@@ -411,10 +454,10 @@ function render() {
             .join('')}</ol>
         </section>
 
-        <div class="workspace-grid">
-          <section class="panel local-panel" aria-label="Your local workspace">
+        <div class="workspace-grid ${ui.spotlightMode ? 'spotlight-enabled' : ''}">
+          <section class="panel local-panel ${ui.spotlightMode && localActive ? 'panel-spotlight-active' : ui.spotlightMode && remoteActive ? 'panel-spotlight-dim' : ''}" aria-label="Your local workspace">
             <header class="panel-heading">
-              <div class="panel-label">${icon('code')}<h2>Your workspace</h2><span class="local-tag">DEVELOPER A (YOU)</span></div>
+              <div class="panel-label">${icon('code')}<h2>Your workspace</h2><span class="local-tag">STATION A · YOU</span>${ui.spotlightMode && localActive ? '<span class="active-turn-pill">👉 YOUR TURN HERE</span>' : ''}</div>
               <button class="branch-button" data-action="branches">${icon('branch')}<span>${esc(run.branch)}</span>${icon('down')}</button>
             </header>
             <div class="level-header">
@@ -508,11 +551,11 @@ function render() {
             </div>
           </section>
 
-          <section class="panel teammate-panel" aria-label="AI teammate and GitHub Hub">
+          <section class="panel teammate-panel ${ui.spotlightMode && remoteActive ? 'panel-spotlight-active' : ui.spotlightMode && localActive ? 'panel-spotlight-dim' : ''}" aria-label="AI teammate and GitHub Hub">
             <div class="hub-tabs" role="tablist" aria-label="Teammate panels">
               ${[
-                ['codex', 'sparkle', 'Codex Teammate'],
-                ['github', 'pr', 'GitHub Pull Requests'],
+                ['codex', 'sparkle', 'Station C · Codex'],
+                ['github', 'pr', 'Station B · GitHub PRs'],
                 ['actions', 'play', 'CI/CD Checks'],
               ]
                 .map(
@@ -1226,6 +1269,11 @@ document.addEventListener('click', async event => {
     switch (action) {
       case 'toggle-level-menu':
         setLevelMenuOpen(!ui.levelMenuOpen, true);
+        break;
+      case 'toggle-spotlight':
+        ui.spotlightMode = !ui.spotlightMode;
+        render();
+        toast(ui.spotlightMode ? 'Guided Spotlight enabled: the active panel is highlighted.' : 'Guided Spotlight turned off.');
         break;
       case 'home':
       case 'workspace':
