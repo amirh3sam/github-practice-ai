@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
 const root = fileURLToPath(new URL('.', import.meta.url));
-const port = Number(process.env.PORT || 5173);
+const port = Number(process.env.PORT || 4321);
 const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.json': 'application/json' };
 const server = http.createServer(async (req, res) => {
   try {
@@ -22,4 +22,4 @@ const server = http.createServer(async (req, res) => {
   } catch { res.writeHead(404).end('Not found'); }
 });
 server.on('error', error => { console.error(error.code === 'EADDRINUSE' ? `Port ${port} is in use. Set PORT to another port.` : error.message); process.exitCode = 1; });
-server.listen(port, '127.0.0.1', () => console.log(`BranchLab is running at http://localhost:${port}`));
+server.listen(port, () => console.log(`BranchLab is running at http://localhost:${port}`));

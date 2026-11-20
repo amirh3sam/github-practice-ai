@@ -27,6 +27,14 @@ import {
   stepFor,
   coachGuide,
 } from './engine.js';
+import {
+  FREE_AI_PROVIDERS,
+  loadAIConfig,
+  saveAIConfig,
+  getProviderMeta,
+  askFreeAI,
+  testOllamaConnection,
+} from './ai-provider.js';
 
 const $ = (selector, root = document) => root.querySelector(selector);
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -72,6 +80,10 @@ try {
   state = createState();
   storageOK = false;
 }
+let aiConfig = loadAIConfig();
+const teammateName = () => aiConfig.teammateName || 'Nova';
+const brandText = text => String(text ?? '').replace(/\bCodex\b/g, teammateName());
+
 const ui = {
   tab: 'codex',
   terminalHistory: [],
@@ -84,6 +96,8 @@ const ui = {
   levelMenuOpen: false,
   selectedCommitHash: null,
   spotlightMode: true,
+  aiChatByLevel: {},
+  aiAsking: false,
 };
 
 let saveTimer;
@@ -289,13 +303,13 @@ function renderThreeStations(run) {
       </div>
     </div>
     <div class="station-arrow ${codexActive || run.prs.length > 1 ? 'active purple' : ''}">
-      <span>${codexActive ? '⬅ Codex pushing…' : '⬅ PR #2'}</span>
+      <span>${codexActive ? `⬅ ${esc(teammateName())} pushing…` : '⬅ PR #2'}</span>
     </div>
     <div class="station-card ${codexActive ? 'station-active purple' : ''}">
       <span class="station-badge purple">C</span>
       <div>
-        <strong>Codex AI Teammate</strong>
-        <small>Branch: <code>feature/codex-task</code> · ${codexActive ? '🤖 Writing code…' : run.prs.length > 1 ? 'PR submitted' : 'Waiting for you'}</small>
+        <strong>${esc(teammateName())} · Free AI Teammate</strong>
+        <small>Engine: <code>${esc(getProviderMeta(aiConfig.provider).name)}</code> · ${codexActive ? '🤖 Writing code…' : run.prs.length > 1 ? 'PR submitted' : '100% Free · Ready'}</small>
       </div>
     </div>
   </div>`;
@@ -347,7 +361,7 @@ function renderLiveBranchGraph(run, level) {
           <span class="visualizer-subtitle">Click any commit dot to inspect it · Watch yours and Codex’s branches diverge &amp; merge!</span>
         </div>
         <div class="visualizer-legend">
-          <span class="legend-chip codex-chip"><i></i>🤖 feature/codex-task</span>
+          <span class="legend-chip codex-chip"><i></i>🤖 feature/codex-task (${esc(teammateName())})</span>
           <span class="legend-chip main-chip"><i></i>🌐 main</span>
           <span class="legend-chip user-chip"><i></i>🧑‍💻 feature/user-task ${run.branch === 'feature/user-task' ? '<b>(HEAD)</b>' : ''}</span>
           ${run.conflict && !run.conflictResolved ? '<span class="status-pill danger-pill">⚡ MERGE CONFLICT</span>' : ''}
@@ -374,7 +388,7 @@ function renderLiveBranchGraph(run, level) {
             <circle cx="${n.x}" cy="${n.y}" r="8" fill="#0d131c" stroke="${n.color}" stroke-width="3.2"/>
             <circle cx="${n.x}" cy="${n.y}" r="3.5" fill="${n.color}"/>
             <text x="${n.x}" y="${n.y - 13}" text-anchor="middle" fill="#cbd5e1" font-size="9" font-family="monospace">${esc(n.hash.slice(0, 6))}</text>
-            <text x="${n.x}" y="${n.y + 22}" text-anchor="middle" fill="#94a3b8" font-size="8.5" font-family="sans-serif">${esc(n.author === 'You' ? 'You' : n.author === 'Codex' ? '🤖 Codex' : 'Init')}</text>
+            <text x="${n.x}" y="${n.y + 22}" text-anchor="middle" fill="#94a3b8" font-size="8.5" font-family="sans-serif">${esc(n.author === 'You' ? 'You' : n.author === 'Codex' ? `🤖 ${teammateName()}` : 'Init')}</text>
           </g>`
             )
             .join('')}
@@ -382,8 +396,8 @@ function renderLiveBranchGraph(run, level) {
       </div>
       <div class="commit-inspector">
         <span class="commit-hash-pill">commit ${esc(selected.hash)}</span>
-        <strong>${esc(selected.message)}</strong>
-        <span class="commit-meta-tag">by <b>${esc(selected.author)}</b> on <code>${esc(selected.branch)}</code></span>
+        <strong>${esc(brandText(selected.message))}</strong>
+        <span class="commit-meta-tag">by <b>${esc(brandText(selected.author))}</b> on <code>${esc(selected.branch)}</code></span>
         <button class="text-button" data-action="branches">${icon('branch')}Full history (${commits.length})</button>
       </div>
       ${renderThreeStations(run)}
@@ -394,7 +408,7 @@ function renderLiveBranchGraph(run, level) {
         <span class="xp-pill">+${level.xp || 100} XP</span>
       </div>
       ${renderConceptGraphic(level.conceptDiagram)}
-      <p class="concept-why"><strong>Why 2 people need this:</strong> ${esc(level.whyTwoPeople)}</p>
+      <p class="concept-why"><strong>Why 2 people need this:</strong> ${esc(brandText(level.whyTwoPeople))}</p>
       <div class="git-skill-chips"><code>${esc(level.gitSkill)}</code></div>
     </aside>
   </section>`;
@@ -417,8 +431,8 @@ function renderCoachBanner(state) {
           ${icon('terminal')}<span>Try CLI: <code>${esc(guide.cliCommand)}</code></span>
         </button>
       </div>
-      <h2>${esc(guide.title)}</h2>
-      <p>${esc(guide.message)}</p>
+      <h2>${esc(brandText(guide.title))}</h2>
+      <p>${esc(brandText(guide.message))}</p>
     </div>
     <div class="coach-cta">
       ${
@@ -463,8 +477,13 @@ function render() {
     <div class="app-shell">
       <header class="topbar">
         <a class="wordmark" href="#" data-action="home">Branch<span>Lab</span><span class="beta">2.0 VISUAL</span></a>
-        <span class="topbar-divider"></span><span class="product-name">2-Player GitHub Collaboration Simulator (You + Codex AI)</span>
+        <span class="topbar-divider"></span><span class="product-name">2-Player GitHub Collaboration Simulator (100% Free AI Teammate)</span>
         <div class="topbar-right">
+          <button class="free-ai-pill" type="button" data-action="ai-settings" title="Choose your 100% Free AI Teammate Engine (Built-in, Ollama Local, Gemini Free Tier, Groq Free Tier)">
+            <span class="green-dot pulsing"></span>
+            <strong>🤖 Free AI: ${esc(teammateName())}</strong>
+            <span class="free-ai-tag">${esc(aiConfig.provider === 'builtin' ? 'Built-in · No Key' : aiConfig.provider.toUpperCase())}</span>
+          </button>
           <button class="spotlight-toggle ${ui.spotlightMode ? 'active' : ''}" type="button" data-action="toggle-spotlight" aria-pressed="${ui.spotlightMode}" title="Toggle Guided Spotlight ring on the active panel">
             ${icon('sparkle')}<span>Guided Spotlight: ${ui.spotlightMode ? 'ON' : 'OFF'}</span>
           </button>
@@ -483,9 +502,9 @@ function render() {
       <main>
         <div class="page-heading">
           <div>
-            <div class="eyebrow"><span class="green-dot"></span> SOLO PRACTICE FOR 2-DEVELOPER GITHUB WORKFLOWS</div>
-            <h1>No teammate? <span>Practice with Codex.</span></h1>
-            <p>Master branching, Pull Requests, code reviews, merge conflicts, <code>git rebase</code>, <code>git revert</code>, <code>git stash</code>, <code>git cherry-pick</code>, and <code>Squash &amp; Merge</code> visually.</p>
+            <div class="eyebrow"><span class="green-dot"></span> 100% FREE 2-DEVELOPER GITHUB SIMULATOR · NO PAID CODEX OR API SUBSCRIPTION REQUIRED</div>
+            <h1>No teammate? <span>Practice with ${esc(teammateName())} (Free AI).</span></h1>
+            <p>Works 100% free in your browser out-of-the-box, or connect <strong>Ollama (Free Local AI)</strong>, <strong>Gemini Flash Free Tier</strong>, or <strong>Groq Free Tier</strong> for live PR reviews.</p>
           </div>
           <div class="progress-summary">
             <div class="progress-ring" style="--progress:${Math.round((state.completed.length / LEVELS.length) * 100)}%">
@@ -547,10 +566,10 @@ function render() {
             ${
               run.conflict && !run.conflictResolved
                 ? `<div class="conflict-resolver-bar" role="region" aria-label="Visual Merge Conflict Resolver">
-                    <div class="conflict-bar-title">${icon('warning')}<strong>Visual Conflict Resolver:</strong><span>Choose how to combine <code>HEAD</code> (Yours) &amp; <code>main</code> (Codex’s)</span></div>
+                    <div class="conflict-bar-title">${icon('warning')}<strong>Visual Conflict Resolver:</strong><span>Choose how to combine <code>HEAD</code> (Yours) &amp; <code>main</code> (${esc(teammateName())}’s)</span></div>
                     <div class="conflict-bar-buttons">
                       <button type="button" class="button small-button subtle" data-action="conflict-keep-mine">Keep Mine Only</button>
-                      <button type="button" class="button small-button subtle" data-action="conflict-keep-codex">Keep Codex’s Only</button>
+                      <button type="button" class="button small-button subtle" data-action="conflict-keep-codex">Keep ${esc(teammateName())}’s Only</button>
                       <button type="button" class="button small-button primary" data-action="insert-resolution">${icon('sparkle')}Combine Both (Recommended)</button>
                     </div>
                   </div>`
@@ -613,7 +632,7 @@ function render() {
           <section class="panel teammate-panel ${ui.spotlightMode && remoteActive ? 'panel-spotlight-active' : ui.spotlightMode && localActive ? 'panel-spotlight-dim' : ''}" aria-label="AI teammate and GitHub Hub">
             <div class="hub-tabs" role="tablist" aria-label="Teammate panels">
               ${[
-                ['codex', 'sparkle', 'Station C · Codex'],
+                ['codex', 'sparkle', `Station C · ${teammateName()} (Free AI)`],
                 ['github', 'pr', 'Station B · GitHub PRs'],
                 ['actions', 'play', 'CI/CD Checks'],
               ]
@@ -805,21 +824,32 @@ function codexContent() {
   const run = getRun(state);
   const level = LEVELS[state.currentLevel - 1];
   const working = ['working', 'revising'].includes(run.status);
+  const providerMeta = getProviderMeta(aiConfig.provider);
+  const chatMessages = ui.aiChatByLevel[level.id] || [];
   return `<div class="codex-identity">
       <div class="codex-avatar">${icon('sparkle')}</div>
       <div>
-        <h3>Codex <span class="ai-label">DEVELOPER B · AI TEAMMATE</span></h3>
+        <h3>${esc(teammateName())} <span class="ai-label">DEVELOPER B · 100% FREE AI TEAMMATE</span></h3>
         <p><span class="${working ? 'pulsing ' : ''}green-dot"></span>${
     working ? 'Working on feature/codex-task' : run.status === 'complete' ? 'Another great merge, teammate.' : run.status === 'review' ? 'Ready for your review' : 'Waiting for you to push your branch'
   }</p>
       </div>
-      <span class="online-pill"><span class="green-dot"></span>Online</span>
+      <button class="free-engine-badge" type="button" data-action="ai-settings" title="Configure Free AI Provider (Built-in, Ollama Local, Gemini Free Tier, Groq Free Tier)">
+        ${icon('settings')}<span>${esc(providerMeta.name)}</span>
+      </button>
+    </div>
+    <div class="free-ai-banner">
+      <div>
+        <strong>✨ No Paid Codex Subscription Required!</strong>
+        <span>Active Engine: <b>${esc(providerMeta.name)}</b> (${esc(providerMeta.cost)})</span>
+      </div>
+      <button class="text-button" type="button" data-action="ai-settings">Switch Free AI ${icon('arrow')}</button>
     </div>
     <div class="teammate-task">
       <div class="task-badge purple">B</div>
       <div>
-        <div class="mini-label">CODEX’S ASSIGNED TASK ON <code>feature/codex-task</code></div>
-        <p>${level.aiTask}</p>
+        <div class="mini-label">${esc(teammateName().toUpperCase())}’S ASSIGNED TASK ON <code>feature/codex-task</code></div>
+        <p>${esc(brandText(level.aiTask))}</p>
         <span>${icon('java')}${level.aiFile}</span>
       </div>
     </div>
@@ -834,17 +864,16 @@ function codexContent() {
               <div class="illustration-check">${icon('check')}</div>
             </div>
             <h3>Your move, teammate!</h3>
-            <p>Click <strong>⚡ 1-Click Fill Code</strong> on the left, then click <strong>Complete &amp; Push Task A</strong>.<br>Codex will immediately jump in on <code>feature/codex-task</code>!</p>
+            <p>Click <strong>⚡ 1-Click Fill Code</strong> on the left, then click <strong>Complete &amp; Push Task A</strong>.<br>${esc(teammateName())} will immediately jump in on <code>feature/codex-task</code>!</p>
             <div class="waiting-chip"><span class="status-dot"></span>Waiting for your first push</div>
-          </div>
-          <div class="collaboration-note">${icon('book')}<p><strong>How 2-person collaboration works:</strong> You work on <code>feature/user-task</code>. Codex works on <code>feature/codex-task</code>. Neither of you pushes directly to <code>main</code>!</p></div>`
-        : `<div class="activity-heading"><span>${icon('terminal')}CODEX LIVE GIT STREAM</span><span>${working ? '<i class="activity-live"></i> Working' : 'Task complete'}</span></div>
-          <div class="ai-log" role="log" aria-label="Codex activity">${run.aiLines
+          </div>`
+        : `<div class="activity-heading"><span>${icon('terminal')}${esc(teammateName().toUpperCase())} LIVE GIT STREAM</span><span>${working ? '<i class="activity-live"></i> Working' : 'Task complete'}</span></div>
+          <div class="ai-log" role="log" aria-label="AI teammate activity">${run.aiLines
             .map(
               (line, i) =>
                 `<div class="ai-log-line"><span class="log-time">00:${String(i * 2).padStart(2, '0')}</span><span class="${/CONFLICT|failing|95.0|behind/.test(line) ? 'text-amber' : ''}">${
                   i === run.aiLines.length - 1 && working ? '<span class="typing-indicator"></span>' : '<span class="log-check">✓</span>'
-                }${esc(line)}</span></div>`
+                }${esc(brandText(line))}</span></div>`
             )
             .join('')}${working ? '<span class="typing-cursor"></span>' : ''}</div>
           ${
@@ -868,7 +897,7 @@ function codexContent() {
               }</strong>
               <span>${
                 working
-                  ? 'Watch the live branch graph update as Codex works.'
+                  ? `Watch the live branch graph update as ${esc(teammateName())} works.`
                   : run.conflict && !run.conflictResolved
                     ? 'Use the Visual Conflict Resolver bar on the left editor.'
                     : run.needsRebase && !run.rebased
@@ -878,7 +907,35 @@ function codexContent() {
             </div>
             ${!working ? '<button class="icon-button" data-action="view-pr" aria-label="Open pull request">' + icon('arrow') + '</button>' : ''}
           </div>`
-    }`;
+    }
+    <div class="ai-coach-chat" aria-label="Ask Free AI Teammate">
+      <div class="ai-coach-chat-header">
+        <div>${icon('sparkle')}<strong>Ask ${esc(teammateName())} · Live Git &amp; PR Assistant</strong></div>
+        <span class="ai-provider-chip">${esc(providerMeta.badge)}</span>
+      </div>
+      <div class="ai-quick-prompts">
+        <button type="button" class="ai-prompt-pill" data-action="ai-ask-quick" data-question="Review the open Pull Request diff and tell me what to check">🔍 Review open PR diff</button>
+        <button type="button" class="ai-prompt-pill" data-action="ai-ask-quick" data-question="Explain the Git commands for Mission ${level.id} (${esc(level.gitSkill)})">💡 Explain this Git command</button>
+        <button type="button" class="ai-prompt-pill" data-action="ai-ask-quick" data-question="Why do two developers need ${esc(level.topic)} in a real team?">👥 Why 2 devs need this?</button>
+      </div>
+      ${
+        chatMessages.length
+          ? `<div class="ai-chat-feed">${chatMessages
+              .slice(-4)
+              .map(
+                msg => `<div class="ai-chat-msg ${msg.role === 'user' ? 'user-msg' : 'assistant-msg'}">
+                  <span class="msg-author">${msg.role === 'user' ? 'You' : `🤖 ${esc(teammateName())} (${esc(msg.model || providerMeta.defaultModel)})`}</span>
+                  <div class="msg-text">${esc(msg.text).replace(/\n/g, '<br>')}</div>
+                </div>`
+              )
+              .join('')}</div>`
+          : ''
+      }
+      <form id="ai-chat-form" class="ai-chat-form">
+        <input id="ai-chat-input" type="text" autocomplete="off" placeholder="Ask ${esc(teammateName())} anything about Git, conflicts, PRs, rebase…" ${ui.aiAsking ? 'disabled' : ''}>
+        <button class="button small-button primary" type="submit" ${ui.aiAsking ? 'disabled' : ''}>${ui.aiAsking ? 'Thinking…' : 'Ask Free AI'}</button>
+      </form>
+    </div>`;
 }
 
 function prChanges(run, level, pr) {
@@ -925,14 +982,14 @@ function githubContent() {
     <div class="pr-list">${run.prs
       .map(
         p =>
-          `<button class="pr-list-item ${pr.id === p.id ? 'selected' : ''}" data-pr="${p.id}">${icon(p.status === 'merged' ? 'merge' : 'pr')}<span><strong>${p.title}</strong><small>#${
+          `<button class="pr-list-item ${pr.id === p.id ? 'selected' : ''}" data-pr="${p.id}">${icon(p.status === 'merged' ? 'merge' : 'pr')}<span><strong>${esc(brandText(p.title))}</strong><small>#${
             p.number
-          } opened by ${p.author}${p.status === 'merged' ? ' · merged' : p.status === 'changes-requested' ? ' · changes requested' : ''}</small></span>${pr.id === p.id ? icon('chevron') : ''}</button>`
+          } opened by ${esc(brandText(p.author))}${p.status === 'merged' ? ' · merged' : p.status === 'changes-requested' ? ' · changes requested' : ''}</small></span>${pr.id === p.id ? icon('chevron') : ''}</button>`
       )
       .join('')}</div>
     <div class="pr-heading"><span class="pr-status ${pr.status === 'merged' ? 'merged' : ''}">${icon(pr.status === 'merged' ? 'merge' : 'pr')}${
     pr.status === 'merged' ? 'Merged' : 'Open'
-  }</span><span><code>${pr.branch}</code>${icon('arrow')}<code>main</code></span><span class="diff-count"><b>+${add}</b><i>−${remove}</i></span></div>
+  }</span><span><code>${pr.branch}</code>${icon('arrow')}<code>main</code></span><button class="text-button ai-pr-review-btn" type="button" data-action="ai-review-pr">${icon('sparkle')}Ask ${esc(teammateName())} (Free AI) to Review Diff</button><span class="diff-count"><b>+${add}</b><i>−${remove}</i></span></div>
     ${
       run.conflict && !run.conflictResolved && pr.id === 'user'
         ? `<div class="notice amber-notice">${icon('warning')}<div><strong>This branch has conflicts with main</strong><p>Codex’s logging landed on main first. Combine your validation and Codex’s logging using the Visual Conflict Resolver bar on the left.</p><button class="text-button" data-action="focus-conflict">Resolve in your editor ${icon('arrow')}</button></div></div>`
@@ -1289,6 +1346,96 @@ function showRoadmap() {
   );
 }
 
+function showAISettings() {
+  showDialog(
+    '🤖 Free AI Teammate & Local/Cloud Engine',
+    `<div class="ai-settings-intro">
+      <strong>100% Free to Use — No Paid OpenAI Codex Account Needed!</strong>
+      <p>By default, <b>${esc(teammateName())}</b> runs 100% free inside your browser with zero setup. Want live LLM Pull Request reviews and open-ended Git Q&amp;A? Connect <b>Ollama (Free Local AI on your PC)</b> or a free-tier cloud key below:</p>
+    </div>
+    <div class="ai-name-row">
+      <label class="field-label" for="ai-teammate-name">Teammate Name</label>
+      <input id="ai-teammate-name" class="ai-text-input" type="text" maxlength="24" value="${esc(aiConfig.teammateName || 'Nova')}" placeholder="Nova, Alex, Llama, Gemini…">
+    </div>
+    <div class="ai-provider-cards" role="radiogroup" aria-label="Free AI Engine">
+      ${FREE_AI_PROVIDERS.map(
+        p => `<label class="ai-provider-card ${aiConfig.provider === p.id ? 'selected' : ''}">
+          <input type="radio" name="ai-provider-choice" value="${esc(p.id)}" ${aiConfig.provider === p.id ? 'checked' : ''}>
+          <div class="ai-provider-card-top">
+            <strong>${esc(p.name)}</strong>
+            <span class="ai-provider-badge">${esc(p.badge)}</span>
+          </div>
+          <small class="ai-provider-cost">${esc(p.cost)}</small>
+          <p>${esc(p.description)}</p>
+        </label>`
+      ).join('')}
+    </div>
+    <div class="ai-provider-configs">
+      <div class="ai-config-box">
+        <strong>🦙 Ollama (Free Local AI on Your PC — No API Key)</strong>
+        <div class="ai-config-grid">
+          <div>
+            <label class="field-label" for="ai-ollama-url">Local Ollama URL</label>
+            <input id="ai-ollama-url" class="ai-text-input" type="text" value="${esc(aiConfig.ollamaUrl)}" placeholder="http://localhost:11434">
+          </div>
+          <div>
+            <label class="field-label" for="ai-ollama-model">Model Name</label>
+            <input id="ai-ollama-model" class="ai-text-input" type="text" value="${esc(aiConfig.ollamaModel)}" placeholder="llama3.2, qwen2.5-coder, deepseek-coder">
+          </div>
+        </div>
+        <div class="ai-config-actions">
+          <button type="button" class="button small-button secondary" data-action="test-ollama">Test Local Ollama Connection</button>
+          <span id="ollama-test-status" class="muted small-text">Install free at ollama.com · Run <code>ollama run llama3.2</code></span>
+        </div>
+      </div>
+      <div class="ai-config-box">
+        <strong>✨ Free-Tier Cloud AI Keys (Optional · Stored Only in Browser)</strong>
+        <div class="ai-config-grid">
+          <div>
+            <label class="field-label" for="ai-gemini-key">Google Gemini Flash Free Tier Key (<a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Get free key</a>)</label>
+            <input id="ai-gemini-key" class="ai-text-input" type="password" value="${esc(aiConfig.geminiKey)}" placeholder="AIzaSy... (optional)">
+          </div>
+          <div>
+            <label class="field-label" for="ai-groq-key">Groq Llama-3.3 Free Tier Key (<a href="https://console.groq.com/keys" target="_blank" rel="noopener">Get free key</a>)</label>
+            <input id="ai-groq-key" class="ai-text-input" type="password" value="${esc(aiConfig.groqKey)}" placeholder="gsk_... (optional)">
+          </div>
+        </div>
+      </div>
+    </div>`,
+    `<button class="button subtle" data-action="close-modal">Cancel</button><button class="button primary" data-action="save-ai-settings">${icon('check')}Save Free AI Settings</button>`
+  );
+}
+
+async function handleAskAI(question) {
+  const q = (question || '').trim();
+  if (!q || ui.aiAsking) return;
+  const levelId = state.currentLevel;
+  const run = getRun(state);
+  ui.aiChatByLevel[levelId] ||= [];
+  ui.aiChatByLevel[levelId].push({ role: 'user', text: q });
+  ui.aiAsking = true;
+  ui.tab = 'codex';
+  render();
+  try {
+    const reply = await askFreeAI(q, state, run, aiConfig);
+    ui.aiChatByLevel[levelId].push({
+      role: 'assistant',
+      text: reply.text,
+      model: reply.model,
+      provider: reply.provider,
+    });
+  } catch (error) {
+    ui.aiChatByLevel[levelId].push({
+      role: 'assistant',
+      text: `Could not reach external AI (${error.message}). Switch to Built-in Free AI anytime!`,
+      model: 'fallback',
+    });
+  } finally {
+    ui.aiAsking = false;
+    render();
+  }
+}
+
 function conflictHelp() {
   showDialog(
     'Keep the best of both branches',
@@ -1450,6 +1597,53 @@ document.addEventListener('click', async event => {
         break;
       case 'roadmap':
         showRoadmap();
+        break;
+      case 'ai-settings':
+        showAISettings();
+        break;
+      case 'save-ai-settings': {
+        const chosen = document.querySelector('input[name="ai-provider-choice"]:checked')?.value || 'builtin';
+        aiConfig = {
+          ...aiConfig,
+          provider: chosen,
+          teammateName: ($('#ai-teammate-name')?.value || 'Nova').trim() || 'Nova',
+          ollamaUrl: ($('#ai-ollama-url')?.value || 'http://localhost:11434').trim(),
+          ollamaModel: ($('#ai-ollama-model')?.value || 'llama3.2').trim(),
+          geminiKey: ($('#ai-gemini-key')?.value || '').trim(),
+          groqKey: ($('#ai-groq-key')?.value || '').trim(),
+        };
+        saveAIConfig(aiConfig);
+        closeDialog();
+        render();
+        toast(`🤖 Free AI updated: ${teammateName()} (${getProviderMeta(aiConfig.provider).name})`);
+        break;
+      }
+      case 'test-ollama': {
+        const url = ($('#ai-ollama-url')?.value || 'http://localhost:11434').trim();
+        const statusEl = $('#ollama-test-status');
+        if (statusEl) statusEl.textContent = 'Testing connection to local Ollama…';
+        try {
+          const res = await testOllamaConnection(url);
+          if (res.models.length && $('#ai-ollama-model')) {
+            $('#ai-ollama-model').value = res.models[0];
+          }
+          if (statusEl) {
+            statusEl.textContent = res.models.length
+              ? `✓ Connected! Found local models: ${res.models.slice(0, 4).join(', ')}`
+              : '✓ Connected to Ollama! Run "ollama pull llama3.2" to add a model.';
+          }
+          toast('Connected to local Ollama server!');
+        } catch (err) {
+          if (statusEl) statusEl.textContent = `Could not reach ${url} (${err.message}). Make sure Ollama is running, or use Built-in Free AI!`;
+          toast('Local Ollama not detected — you can use the Built-in Free AI with zero setup!', 'error');
+        }
+        break;
+      }
+      case 'ai-ask-quick':
+        await handleAskAI(button.dataset.question);
+        break;
+      case 'ai-review-pr':
+        await handleAskAI('Review the open Pull Request diff and tell me what to check before merging.');
         break;
       case 'curriculum':
         showDialog(
@@ -1709,6 +1903,15 @@ document.addEventListener('click', event => {
   if (event.target.id === 'code-input') updateCursor();
 });
 document.addEventListener('submit', event => {
+  if (event.target.id === 'ai-chat-form') {
+    event.preventDefault();
+    const input = $('#ai-chat-input');
+    const q = input?.value?.trim();
+    if (!q) return;
+    input.value = '';
+    void handleAskAI(q);
+    return;
+  }
   if (event.target.id !== 'terminal-form') return;
   event.preventDefault();
   const input = $('#terminal-input');

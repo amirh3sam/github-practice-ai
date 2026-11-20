@@ -29,6 +29,12 @@ import {
   stepFor,
   coachGuide,
 } from '../src/engine.js';
+import {
+  FREE_AI_PROVIDERS,
+  defaultAIConfig,
+  loadAIConfig,
+  askFreeAI,
+} from '../src/ai-provider.js';
 
 function ready(id = 1) {
   const state = createState();
@@ -328,4 +334,21 @@ test('a learner completes all nine levels in sequence with reloads and terminal 
   assert.deepEqual(state.completed, [1, 2, 3, 4, 5, 6, 7, 8, 9]);
   assert.deepEqual(state.badges, LEVELS.map(level => level.badge));
   assert.ok(state.xp > 1200);
+});
+
+test('free AI teammate provider defaults to 100% free built-in Nova engine and falls back gracefully', async () => {
+  const cfg = defaultAIConfig();
+  assert.equal(cfg.provider, 'builtin');
+  assert.equal(cfg.teammateName, 'Nova');
+  assert.ok(FREE_AI_PROVIDERS.some(p => p.id === 'ollama' && p.needsKey === false));
+
+  const state = ready(4);
+  const run = getRun(state);
+  const reviewReply = await askFreeAI('Review the open Pull Request diff', state, run, cfg);
+  assert.equal(reviewReply.provider, 'builtin');
+  assert.match(reviewReply.text, /95\.0/);
+
+  const fallbackReply = await askFreeAI('Explain git rebase', state, run, { ...cfg, provider: 'gemini', geminiKey: '' });
+  assert.equal(fallbackReply.fallback, true);
+  assert.match(fallbackReply.text, /Nova/);
 });
